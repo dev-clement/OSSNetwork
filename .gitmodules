@@ -1,0 +1,12 @@
+# Git Submodules Configuration
+# 
+# This file will contain references to the frontend and backend repositories
+# once they are created and ready to be linked.
+#
+# Expected structure:
+[submodule "frontend"]
+    path = frontend
+    url = git@github.com:dev-clement/OSSNetwork-frontend.git
+[submodule "backend"]
+    path = backend
+    url = git@github.com:dev-clement/OSSNetwork-backend.git

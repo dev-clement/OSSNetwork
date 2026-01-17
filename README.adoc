@@ -1,0 +1,111 @@
+= 🚀 Project Charter: OSS Network 🌐
+
+== 1. Project Overview 📝
+
+OSS Network is a specialized social platform designed to bridge the gap between open-source project maintainers and developers looking for meaningful contributions. 🤝 Unlike generic code hosting platforms, it focuses on the social and professional connection side of open source, helping developers build a "Contribution Portfolio" 🏆 and helping maintainers find reliable help. ✨
+
+=== 💡 Project Origins & Credit
+
+This project concept was originally sparked by a LinkedIn colleague and Prime Architect 🏗️ who has been working tirelessly on modernizing community collaboration. Her vision for a more connected, architecturally sound open-source ecosystem serves as the foundation for this implementation. This project aims to bring those high-level architectural goals into a functional reality. 👩‍💻🔥
+
+== 2. Core Functional Requirements (User Stories) 👤
+
+The application will be built around these primary pillars:
+
+=== A. Authentication & Identity 🔐
+
+* *Standard Auth:* Users can register, sign in, and sign out using email and password. 📧
+* *GitHub Integration:* Future support for OAuth2 to link GitHub profiles to the OSS Network identity. 🐙
+* *User Profiles:* Displays user bio, tech stack (e.g., Python, Vue), and a history of their OSS contributions. 👨‍💻👩‍💻
+
+=== B. Project Discovery 🔍
+
+* *OSS Directory:* A searchable list of registered projects. 📂
+* *Project Dashboard:* A view for each project showing its repository link, description, and "Help Wanted" status. 💡
+* *Submission:* Any registered user can suggest/index an existing OSS project on the platform. 📥
+
+=== C. Contribution Management 🛠️
+
+* *Request System:* A formal "Ask to Contribute" flow where a user expresses interest in a project. 🙋‍♂️
+* *Status Tracking:* A pipeline to track the state of a contribution: Interested → In Progress → Merged/Completed. ✅
+
+== 3. Technical Stack (The Blueprint) 🏗️
+
+The project utilizes a modern, containerized architecture:
+
+[cols="1,1,2"]
+|===
+|Tier |Technology |Role
+
+|Frontend 🎨
+|Vue.js 3 + Vite
+|High-performance Single Page Application (SPA).
+
+|Backend ⚙️
+|Python 3.12 + Django-Ninja
+|Type-safe, FastAPI-style REST API with Django's reliability.
+
+|Database 🗄️
+|PostgreSQL 16
+|Relational storage for users, projects, and social links.
+
+|Management 📦
+|Pixi
+|Modern dependency and environment management.
+
+|Infrastructure 🐳
+|Docker Compose
+|Orchestration of frontend, backend, and DB services.
+
+|Reverse Proxy 🚦
+|Nginx
+|Traffic routing for /api and / (frontend) paths.
+|===
+
+== 4. System Architecture & Data Model 🗺️
+
+To be implemented in the first phase:
+
+* *User Model:* Extends the standard Django user with a github_handle and bio. 👤
+* *Project Model:* Stores title, description, repository_url, and tags (languages). 📁
+* *Contribution Model:* A many-to-many relationship linking Users to Projects with a status field. 🔗
+
+== 5. Development Roadmap 📅
+
+=== Phase 1: Infrastructure (Saturday Kick-off) 🏁
+
+* Initialize the repository with docker-compose.yaml and pixi.toml. 🛠️
+* Verify Nginx routing to both the Backend (Django-Ninja) and Frontend (Vue/Vite). 📡
+* Establish the PostgreSQL connection. 🔌
+
+=== Phase 2: Backend Core 🧠
+
+* Implement the three core models (User, Project, Contribution). 💾
+* Build the Django-Ninja API endpoints for Project Listing and Authentication. 🛣️
+
+=== Phase 3: Frontend Implementation 💻
+
+* Build the Vue.js dashboard to consume the API. 🖼️
+* Implement the Project Discovery UI and the Contribution "Request" button. 🖱️
+
+== Repository Structure
+
+This repository serves as the main hub for the OSSNetwork application. It is organized to bring together multiple components:
+
+=== Components
+
+* *frontend/* - (To be added) Link to the front-end repository
+* *backend/* - (To be added) Link to the back-end repository  
+* *deployment/* - Contains deployment configurations, scripts, and documentation
+
+=== Architecture
+
+The application is split into separate repositories for better modularity and development workflow:
+
+* Frontend repository will handle the user interface and client-side logic
+* Backend repository will handle the server-side API and business logic
+* This main repository acts as the integration point and contains deployment configurations
+
+=== Getting Started
+
+Detailed setup instructions will be provided once the frontend and backend repositories are linked.
