@@ -5,8 +5,8 @@
 #
 # Expected structure:
 [submodule "frontend"]
-    path = frontend
-    url = git@github.com:dev-clement/OSSNetwork-frontend.git
+	path = frontend
+	url = https://github.com/dev-clement/OSSNetwork-frontend.git
 [submodule "backend"]
-    path = backend
-    url = git@github.com:dev-clement/OSSNetwork-backend.git
+	path = backend
+	url = https://github.com/dev-clement/OSSNetwork-backend.git
