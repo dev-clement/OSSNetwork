@@ -94,8 +94,8 @@ This repository serves as the main hub for the OSSNetwork application. It is org
 
 === Components
 
-* *frontend/* - (To be added) Link to the front-end repository
-* *backend/* - (To be added) Link to the back-end repository  
+* *frontend/* - Vue.js 3 + Vite frontend application (linked as git submodule)
+* *backend/* - Python 3.12 + Django-Ninja backend API (linked as git submodule)
 * *deployment/* - Contains deployment configurations, scripts, and documentation
 
 === Architecture
@@ -108,4 +108,29 @@ The application is split into separate repositories for better modularity and de
 
 === Getting Started
 
-Detailed setup instructions will be provided once the frontend and backend repositories are linked.
+==== Clone the Repository with Submodules
+
+To clone this repository along with all its submodules (frontend and backend):
+
+[source,bash]
+----
+git clone --recurse-submodules https://github.com/dev-clement/OSSNetwork.git
+----
+
+==== Initialize Submodules in an Existing Clone
+
+If you've already cloned the repository without submodules, you can initialize and fetch them:
+
+[source,bash]
+----
+git submodule update --init --recursive
+----
+
+==== Update Submodules
+
+To update the submodules to their latest commits:
+
+[source,bash]
+----
+git submodule update --remote
+----
