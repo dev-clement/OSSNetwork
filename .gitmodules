@@ -4,9 +4,9 @@
 # once they are created and ready to be linked.
 #
 # Expected structure:
-# [submodule "frontend"]
-#     path = frontend
-#     url = <frontend-repository-url>
-# [submodule "backend"]
-#     path = backend
-#     url = <backend-repository-url>
+[submodule "frontend"]
+    path = frontend
+    url = git@github.com:dev-clement/OSSNetwork-frontend.git
+[submodule "backend"]
+    path = backend
+    url = git@github.com:dev-clement/OSSNetwork-backend.git
