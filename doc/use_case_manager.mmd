@@ -1,0 +1,30 @@
+graph LR
+    PM((Project Manager))
+
+    subgraph OSS [OSSNetwork System]
+        direction TB
+        %% Authentication
+        UC1([Sign-in])
+        UC2([Log-in])
+        UC3([Sign-out])
+        UC4([Logout])
+
+        %% Project Management
+        UC5([Handle Notifications])
+        UC6([Enable Contributor on Project])
+        UC7(["Manage Projects (CRUD)"])
+        UC8([Handle User Roles in Project])
+        UC9([Send Message to Project Members])
+        UC10([Role Notification])
+    end
+
+    PM --> UC1
+    PM --> UC2
+    PM --> UC3
+    PM --> UC4
+    PM --> UC5
+    PM --> UC6
+    PM --> UC7
+    PM --> UC8
+    PM --> UC9
+    PM --> UC10

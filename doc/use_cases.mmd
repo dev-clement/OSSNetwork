@@ -1,0 +1,19 @@
+graph LR
+    EndUser((End User))
+    Admin((Administrator))
+
+    subgraph OSS [OSSNetwork System]
+        direction TB
+        UC1([Access Responsive UI<br/>GEN-005])
+        UC2([Secure Login<br/>OAuth2 - GEN-006])
+        UC3([Modify Personal Data<br/>GDPR - GEN-002])
+        UC4([Manage System Modules<br/>GEN-003])
+    end
+
+    EndUser --> UC1
+    EndUser --> UC2
+    EndUser --> UC3
+
+    Admin --> UC2
+    Admin --> UC4
+

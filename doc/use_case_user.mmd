@@ -1,0 +1,30 @@
+graph LR
+    Dev((Developer))
+
+    subgraph OSS [OSSNetwork System]
+        direction TB
+        %% Authentication & Session
+        UC1([Sign-in])
+        UC2([Log-in])
+        UC3([Sign-Out])
+
+        %% Project Interaction
+        UC4([See all projects])
+        UC5([Filter the projects])
+        UC6([Contact a project])
+        UC7([Ask for working on the project])
+
+        %% Notifications
+        UC8([Handle Notification])
+        UC9([Push notification])
+    end
+
+    Dev --> UC1
+    Dev --> UC2
+    Dev --> UC3
+    Dev --> UC4
+    Dev --> UC5
+    Dev --> UC6
+    Dev --> UC7
+    Dev --> UC8
+    Dev --> UC9
