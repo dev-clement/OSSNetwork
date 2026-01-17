@@ -42,8 +42,8 @@ The project utilizes a modern, containerized architecture:
 |High-performance Single Page Application (SPA).
 
 |Backend ⚙️
-|Python 3.12 + Django-Ninja
-|Type-safe, FastAPI-style REST API with Django's reliability.
+|Python 3.12 + FastAPI
+|Modern, fast (high-performance) web framework for building APIs with Python type hints.
 
 |Database 🗄️
 |PostgreSQL 16
@@ -75,13 +75,13 @@ To be implemented in the first phase:
 === Phase 1: Infrastructure (Saturday Kick-off) 🏁
 
 * Initialize the repository with docker-compose.yaml and pixi.toml. 🛠️
-* Verify Nginx routing to both the Backend (Django-Ninja) and Frontend (Vue/Vite). 📡
+* Verify Nginx routing to both the Backend (FastAPI) and Frontend (Vue/Vite). 📡
 * Establish the PostgreSQL connection. 🔌
 
 === Phase 2: Backend Core 🧠
 
 * Implement the three core models (User, Project, Contribution). 💾
-* Build the Django-Ninja API endpoints for Project Listing and Authentication. 🛣️
+* Build the FastAPI endpoints for Project Listing and Authentication. 🛣️
 
 === Phase 3: Frontend Implementation 💻
 
@@ -95,7 +95,7 @@ This repository serves as the main hub for the OSSNetwork application. It is org
 === Components
 
 * *frontend/* - Vue.js 3 + Vite frontend application (linked as git submodule)
-* *backend/* - Python 3.12 + Django-Ninja backend API (linked as git submodule)
+* *backend/* - Python 3.12 + FastAPI backend API (linked as git submodule)
 * *deployment/* - Contains deployment configurations, scripts, and documentation
 
 === Architecture
