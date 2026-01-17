@@ -1,0 +1,23 @@
+# Deployment
+
+This directory contains deployment information and configurations for the OSSNetwork application.
+
+## Purpose
+
+The deployment folder is designed to store:
+- Deployment scripts and automation
+- Infrastructure as Code (IaC) configurations
+- Environment configuration templates
+- Deployment documentation and runbooks
+- CI/CD pipeline configurations
+
+## Structure
+
+This folder will be organized to support deployment across different environments:
+- Development
+- Staging
+- Production
+
+## Getting Started
+
+Deployment instructions and guidelines will be added as the project evolves.
