@@ -1,0 +1,102 @@
+= Documentation
+:toc:
+
+This folder contains the requirement engineering documents and use case diagrams for the OSSNetwork project.
+
+== Use Cases
+
+=== General Use Cases
+
+[mermaid]
+....
+graph LR
+    EndUser((End User))
+    Admin((Administrator))
+
+    subgraph OSS [OSSNetwork System]
+        direction TB
+        UC1([Access Responsive UI<br/>GEN-005])
+        UC2([Secure Login<br/>OAuth2 - GEN-006])
+        UC3([Modify Personal Data<br/>GDPR - GEN-002])
+        UC4([Manage System Modules<br/>GEN-003])
+    end
+
+    EndUser --> UC1
+    EndUser --> UC2
+    EndUser --> UC3
+
+    Admin --> UC2
+    Admin --> UC4
+....
+
+=== Manager Use Cases
+
+[mermaid]
+....
+graph LR
+    PM((Project Manager))
+
+    subgraph OSS [OSSNetwork System]
+        direction TB
+        %% Authentication
+        UC1([Sign-in])
+        UC2([Log-in])
+        UC3([Sign-out])
+        UC4([Logout])
+
+        %% Project Management
+        UC5([Handle Notifications])
+        UC6([Enable Contributor on Project])
+        UC7(["Manage Projects (CRUD)"])
+        UC8([Handle User Roles in Project])
+        UC9([Send Message to Project Members])
+        UC10([Role Notification])
+    end
+
+    PM --> UC1
+    PM --> UC2
+    PM --> UC3
+    PM --> UC4
+    PM --> UC5
+    PM --> UC6
+    PM --> UC7
+    PM --> UC8
+    PM --> UC9
+    PM --> UC10
+....
+
+=== User/Developer Use Cases
+
+[mermaid]
+....
+graph LR
+    Dev((Developer))
+
+    subgraph OSS [OSSNetwork System]
+        direction TB
+        %% Authentication & Session
+        UC1([Sign-in])
+        UC2([Log-in])
+        UC3([Sign-Out])
+
+        %% Project Interaction
+        UC4([See all projects])
+        UC5([Filter the projects])
+        UC6([Contact a project])
+        UC7([Ask for working on the project])
+
+        %% Notifications
+        UC8([Handle Notification])
+        UC9([Push notification])
+    end
+
+    Dev --> UC1
+    Dev --> UC2
+    Dev --> UC3
+    Dev --> UC4
+    Dev --> UC5
+    Dev --> UC6
+    Dev --> UC7
+    Dev --> UC8
+    Dev --> UC9
+....
