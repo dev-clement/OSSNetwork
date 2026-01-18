@@ -1,0 +1,961 @@
+= Deployment Architecture Document
+:toc: macro
+:toclevels: 3
+:sectnums:
+
+toc::[]
+
+== 1. Introduction
+
+=== 1.1 Purpose
+
+This document describes the deployment architecture of the OSSNetwork system, including infrastructure design, containerization strategy, and deployment procedures across different environments.
+
+=== 1.2 Scope
+
+This document covers:
+
+* Container architecture and orchestration
+* Network topology and routing
+* Environment configurations
+* Deployment strategies and procedures
+* Infrastructure as Code
+* Monitoring and observability
+
+== 2. Deployment Overview
+
+=== 2.1 Deployment Strategy
+
+The OSSNetwork application uses a containerized deployment strategy with Docker and Docker Compose, enabling:
+
+* *Consistency*: Same container images across all environments
+* *Isolation*: Each component runs in isolated containers
+* *Portability*: Deploy anywhere Docker runs
+* *Scalability*: Easy horizontal scaling
+* *Version Control*: Infrastructure as Code
+
+=== 2.2 Infrastructure Components
+
+[cols="1,2,2"]
+|===
+| Component | Technology | Purpose
+
+| *Container Runtime*
+| Docker
+| Run containerized applications
+
+| *Orchestration*
+| Docker Compose
+| Multi-container application management
+
+| *Reverse Proxy*
+| Nginx
+| Traffic routing and SSL termination
+
+| *Package Management*
+| Pixi (Backend)
+| Python dependency management
+
+| *Package Management*
+| npm (Frontend)
+| JavaScript dependency management
+|===
+
+== 3. Container Architecture
+
+=== 3.1 Container Overview
+
+[mermaid]
+....
+graph TB
+    subgraph Internet
+        Client[Web Browser]
+    end
+    
+    subgraph Docker Host
+        subgraph ossnetwork_network [Docker Network: ossnetwork]
+            Nginx[Nginx Container<br/>Port: 80, 443]
+            Frontend[Frontend Container<br/>Port: 3000<br/>Node.js + Vite]
+            Backend[Backend Container<br/>Port: 8000<br/>Python + FastAPI]
+            DB[(PostgreSQL Container<br/>Port: 5432<br/>Database)]
+        end
+    end
+    
+    Client -->|HTTPS| Nginx
+    Nginx -->|/| Frontend
+    Nginx -->|/api| Backend
+    Backend --> DB
+....
+
+=== 3.2 Container Specifications
+
+==== 3.2.1 Frontend Container
+
+[source,dockerfile]
+----
+# Multi-stage build for optimization
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+----
+
+*Specifications*:
+
+* Base Image: `node:20-alpine` (build), `nginx:alpine` (runtime)
+* Exposed Ports: 80 (internal), mapped to host
+* Environment: Production build optimizations
+* Health Check: HTTP GET / returns 200
+
+==== 3.2.2 Backend Container
+
+[source,dockerfile]
+----
+FROM ghcr.io/prefix-dev/pixi:latest AS builder
+WORKDIR /app
+COPY pixi.toml pixi.lock ./
+RUN pixi install
+
+FROM python:3.12-slim
+WORKDIR /app
+COPY --from=builder /app/.pixi /app/.pixi
+COPY . .
+EXPOSE 8000
+CMD ["pixi", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+----
+
+*Specifications*:
+
+* Base Image: `python:3.12-slim`
+* Exposed Ports: 8000
+* Environment Variables: DATABASE_URL, SECRET_KEY
+* Health Check: HTTP GET /api/health returns 200
+
+==== 3.2.3 Database Container
+
+[source,yaml]
+----
+services:
+  database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ossnetwork
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ossnetwork
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ossnetwork"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+----
+
+*Specifications*:
+
+* Base Image: `postgres:16-alpine`
+* Data Persistence: Named volume `postgres_data`
+* Port: 5432 (internal network only in production)
+* Health Check: pg_isready command
+
+==== 3.2.4 Nginx Container
+
+[source,nginx]
+----
+# nginx.conf
+upstream frontend {
+    server frontend:3000;
+}
+
+upstream backend {
+    server backend:8000;
+}
+
+server {
+    listen 80;
+    server_name localhost;
+
+    # Frontend
+    location / {
+        proxy_pass http://frontend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Backend API
+    location /api/ {
+        proxy_pass http://backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Health check
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+    }
+}
+----
+
+*Specifications*:
+
+* Base Image: `nginx:alpine`
+* Exposed Ports: 80, 443 (with SSL)
+* Configuration: Mounted from host
+* Role: Reverse proxy, load balancer, SSL termination
+
+=== 3.3 Docker Compose Configuration
+
+[source,yaml]
+----
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: ossnetwork-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - ossnetwork
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ossnetwork-frontend
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=http://backend:8000
+    networks:
+      - ossnetwork
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ossnetwork-backend
+    environment:
+      - DATABASE_URL=postgresql://ossnetwork:${DB_PASSWORD}@database:5432/ossnetwork
+      - SECRET_KEY=${SECRET_KEY}
+      - ENVIRONMENT=production
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - ossnetwork
+    restart: unless-stopped
+
+  database:
+    image: postgres:16-alpine
+    container_name: ossnetwork-db
+    environment:
+      - POSTGRES_USER=ossnetwork
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=ossnetwork
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - ossnetwork
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ossnetwork"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+networks:
+  ossnetwork:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+----
+
+== 4. Network Architecture
+
+=== 4.1 Network Topology
+
+[mermaid]
+....
+graph TB
+    Internet((Internet))
+    
+    subgraph Docker Host
+        subgraph Bridge Network ossnetwork
+            Nginx[Nginx<br/>ossnetwork-nginx]
+            Frontend[Frontend<br/>ossnetwork-frontend]
+            Backend[Backend<br/>ossnetwork-backend]
+            Database[(Database<br/>ossnetwork-db)]
+        end
+    end
+    
+    Internet -->|Port 80/443| Nginx
+    Nginx -->|Internal| Frontend
+    Nginx -->|Internal| Backend
+    Backend -->|Internal<br/>Port 5432| Database
+....
+
+=== 4.2 Port Mapping
+
+[cols="1,1,2,2"]
+|===
+| Service | Host Port | Container Port | Purpose
+
+| Nginx
+| 80
+| 80
+| HTTP traffic
+
+| Nginx
+| 443
+| 443
+| HTTPS traffic
+
+| Frontend
+| -
+| 3000
+| Internal only (via Nginx)
+
+| Backend
+| -
+| 8000
+| Internal only (via Nginx)
+
+| Database
+| 5432 (dev only)
+| 5432
+| Database access (internal only in prod)
+|===
+
+=== 4.3 Network Security
+
+* *External Access*: Only Nginx exposed to internet (ports 80/443)
+* *Internal Communication*: Services communicate via Docker network
+* *Database*: Not exposed to internet in production
+* *Firewall Rules*: Host firewall allows only 80/443
+* *TLS/SSL*: All external traffic encrypted
+
+== 5. Environment Configuration
+
+=== 5.1 Environment Types
+
+==== 5.1.1 Development Environment
+
+[cols="1,3"]
+|===
+| Aspect | Configuration
+
+| *Purpose*
+| Local development and testing
+
+| *Database*
+| Local PostgreSQL container or host installation
+
+| *Hot Reload*
+| Enabled for both frontend and backend
+
+| *Debug Mode*
+| Enabled with verbose logging
+
+| *Ports*
+| Direct access to all services
+
+| *SSL*
+| Not required (HTTP only)
+
+| *Data*
+| Development seed data
+
+| *Environment File*
+| `.env.development`
+|===
+
+==== 5.1.2 Staging Environment
+
+[cols="1,3"]
+|===
+| Aspect | Configuration
+
+| *Purpose*
+| Pre-production testing and QA
+
+| *Database*
+| Separate staging database
+
+| *Configuration*
+| Production-like settings
+
+| *Debug Mode*
+| Limited debugging, structured logging
+
+| *Ports*
+| Only 80/443 exposed
+
+| *SSL*
+| Valid SSL certificate
+
+| *Data*
+| Sanitized production copy or test data
+
+| *Environment File*
+| `.env.staging`
+|===
+
+==== 5.1.3 Production Environment
+
+[cols="1,3"]
+|===
+| Aspect | Configuration
+
+| *Purpose*
+| Live production system
+
+| *Database*
+| Production PostgreSQL with backups
+
+| *Configuration*
+| Optimized for performance and security
+
+| *Debug Mode*
+| Disabled, error logging only
+
+| *Ports*
+| Only 80/443 exposed
+
+| *SSL*
+| Valid SSL certificate, HSTS enabled
+
+| *Data*
+| Live production data with backups
+
+| *Monitoring*
+| Full monitoring and alerting
+
+| *Environment File*
+| `.env.production` (secrets managed securely)
+|===
+
+=== 5.2 Environment Variables
+
+==== 5.2.1 Backend Environment Variables
+
+[source,bash]
+----
+# Database
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+DB_POOL_SIZE=20
+DB_MAX_OVERFLOW=10
+
+# Application
+SECRET_KEY=<strong-random-secret>
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Environment
+ENVIRONMENT=production  # development, staging, production
+DEBUG=false
+LOG_LEVEL=INFO
+
+# External Services
+GITHUB_CLIENT_ID=<github-oauth-client-id>
+GITHUB_CLIENT_SECRET=<github-oauth-client-secret>
+
+# CORS
+CORS_ORIGINS=["https://ossnetwork.com"]
+----
+
+==== 5.2.2 Frontend Environment Variables
+
+[source,bash]
+----
+# API Configuration
+VITE_API_URL=https://api.ossnetwork.com
+VITE_API_TIMEOUT=30000
+
+# Application
+VITE_APP_NAME=OSSNetwork
+VITE_APP_VERSION=1.0.0
+
+# Features
+VITE_ENABLE_ANALYTICS=true
+VITE_ENABLE_ERROR_TRACKING=true
+
+# Environment
+NODE_ENV=production
+----
+
+== 6. Deployment Procedures
+
+=== 6.1 Initial Deployment
+
+[source,bash]
+----
+# 1. Clone repository with submodules
+git clone --recurse-submodules https://github.com/dev-clement/OSSNetwork.git
+cd OSSNetwork
+
+# 2. Create environment file
+cp .env.example .env
+# Edit .env with appropriate values
+
+# 3. Build and start services
+docker-compose up -d --build
+
+# 4. Run database migrations
+docker-compose exec backend pixi run alembic upgrade head
+
+# 5. Verify deployment
+docker-compose ps
+curl http://localhost/health
+----
+
+=== 6.2 Update Deployment
+
+[source,bash]
+----
+# 1. Update code
+git pull
+git submodule update --remote
+
+# 2. Rebuild containers
+docker-compose build
+
+# 3. Run migrations (if needed)
+docker-compose exec backend pixi run alembic upgrade head
+
+# 4. Restart services (zero-downtime)
+docker-compose up -d --no-deps --build backend
+docker-compose up -d --no-deps --build frontend
+
+# 5. Verify
+docker-compose ps
+docker-compose logs -f --tail=100
+----
+
+=== 6.3 Rollback Procedure
+
+[source,bash]
+----
+# 1. Stop current version
+docker-compose down
+
+# 2. Checkout previous version
+git checkout <previous-tag>
+git submodule update --init --recursive
+
+# 3. Rollback database (if needed)
+docker-compose exec backend pixi run alembic downgrade -1
+
+# 4. Start services
+docker-compose up -d
+
+# 5. Verify
+curl http://localhost/health
+----
+
+== 7. Scaling Strategy
+
+=== 7.1 Vertical Scaling
+
+* Increase container resource limits (CPU, memory)
+* Optimize application configuration (connection pools)
+* Upgrade host machine resources
+
+=== 7.2 Horizontal Scaling
+
+==== 7.2.1 Backend Scaling
+
+[source,yaml]
+----
+services:
+  backend:
+    deploy:
+      replicas: 3
+    # Load balanced by Nginx
+----
+
+==== 7.2.2 Nginx Load Balancing
+
+[source,nginx]
+----
+upstream backend {
+    least_conn;
+    server backend-1:8000;
+    server backend-2:8000;
+    server backend-3:8000;
+}
+----
+
+==== 7.2.3 Database Scaling
+
+* Read replicas for read-heavy operations
+* Connection pooling optimization
+* Query optimization and caching
+
+=== 7.3 Future: Kubernetes Migration
+
+For larger scale deployments:
+
+* Kubernetes for orchestration
+* Helm charts for deployment
+* Horizontal pod autoscaling
+* Service mesh (Istio) for advanced routing
+
+== 8. Monitoring & Observability
+
+=== 8.1 Health Checks
+
+==== 8.1.1 Application Health
+
+[source,python]
+----
+# Backend health endpoint
+@app.get("/api/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "database": await check_database(),
+        "timestamp": datetime.now()
+    }
+----
+
+==== 8.1.2 Container Health
+
+* Docker health checks for all containers
+* Automatic restart on failure
+* Health check intervals and timeouts
+
+=== 8.2 Logging Strategy
+
+[cols="1,2,2"]
+|===
+| Component | Log Level | Destination
+
+| Frontend
+| INFO (prod), DEBUG (dev)
+| Browser console, external service
+
+| Backend
+| INFO (prod), DEBUG (dev)
+| stdout, structured JSON format
+
+| Nginx
+| access, error
+| Log files, stdout
+
+| Database
+| log_min_messages=WARNING
+| Log files
+|===
+
+=== 8.3 Log Aggregation (Future)
+
+* *Tool*: ELK Stack (Elasticsearch, Logstash, Kibana) or Loki
+* *Collection*: Docker log drivers
+* *Retention*: 30 days
+* *Analysis*: Centralized log analysis and search
+
+=== 8.4 Metrics & Monitoring (Future)
+
+==== 8.4.1 Infrastructure Metrics
+
+* CPU, memory, disk usage per container
+* Network throughput and latency
+* Container restart counts
+
+==== 8.4.2 Application Metrics
+
+* Request rate, latency, error rate
+* API endpoint performance
+* Database query performance
+* Active user sessions
+
+==== 8.4.3 Monitoring Stack (Future)
+
+[source,yaml]
+----
+services:
+  prometheus:
+    image: prom/prometheus
+    # Metrics collection
+
+  grafana:
+    image: grafana/grafana
+    # Metrics visualization
+
+  node-exporter:
+    image: prom/node-exporter
+    # Host metrics
+----
+
+== 9. Backup & Disaster Recovery
+
+=== 9.1 Backup Strategy
+
+==== 9.1.1 Database Backups
+
+[source,bash]
+----
+# Automated daily backup
+docker-compose exec database pg_dump -U ossnetwork ossnetwork > backup-$(date +%Y%m%d).sql
+
+# Backup to remote storage
+aws s3 cp backup-$(date +%Y%m%d).sql s3://ossnetwork-backups/
+----
+
+==== 9.1.2 Volume Backups
+
+[source,bash]
+----
+# Backup Docker volume
+docker run --rm \
+  -v postgres_data:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/postgres-backup.tar.gz /data
+----
+
+==== 9.1.3 Backup Schedule
+
+* Full database backup: Daily at 2 AM
+* Incremental backup: Every 6 hours
+* Volume snapshot: Weekly
+* Retention: 30 days
+
+=== 9.2 Disaster Recovery
+
+==== 9.2.1 Recovery Procedures
+
+[source,bash]
+----
+# 1. Stop services
+docker-compose down
+
+# 2. Restore database
+docker-compose up -d database
+cat backup-20260118.sql | docker-compose exec -T database psql -U ossnetwork
+
+# 3. Start services
+docker-compose up -d
+
+# 4. Verify
+docker-compose ps
+curl http://localhost/health
+----
+
+==== 9.2.2 Recovery Time Objective (RTO)
+
+* *Target RTO*: 1 hour
+* *Target RPO*: 6 hours (Recovery Point Objective)
+* *Test Recovery*: Monthly disaster recovery drills
+
+== 10. Security Hardening
+
+=== 10.1 Container Security
+
+* Use minimal base images (alpine)
+* Run containers as non-root user
+* Scan images for vulnerabilities
+* Keep base images updated
+* Remove unnecessary packages
+
+=== 10.2 Network Security
+
+* Implement firewall rules
+* Use private Docker networks
+* Disable unnecessary ports
+* Enable SSL/TLS everywhere
+* Implement rate limiting
+
+=== 10.3 Secrets Management
+
+* Never commit secrets to version control
+* Use environment variables for secrets
+* Future: HashiCorp Vault or AWS Secrets Manager
+* Rotate secrets regularly
+* Encrypt secrets at rest
+
+=== 10.4 SSL/TLS Configuration
+
+[source,nginx]
+----
+server {
+    listen 443 ssl http2;
+    
+    ssl_certificate /etc/nginx/ssl/cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/key.pem;
+    
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    
+    add_header Strict-Transport-Security "max-age=31536000" always;
+}
+----
+
+== 11. CI/CD Integration (Future)
+
+=== 11.1 Continuous Integration
+
+[source,yaml]
+----
+# .github/workflows/ci.yml
+name: CI
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run tests
+        run: docker-compose -f docker-compose.test.yml up --abort-on-container-exit
+----
+
+=== 11.2 Continuous Deployment
+
+[source,yaml]
+----
+# .github/workflows/deploy.yml
+name: Deploy
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build and push images
+        run: |
+          docker build -t ossnetwork/backend:latest ./backend
+          docker push ossnetwork/backend:latest
+      - name: Deploy to production
+        run: ssh user@server 'cd /app && docker-compose pull && docker-compose up -d'
+----
+
+== 12. Infrastructure as Code
+
+=== 12.1 Terraform Configuration (Future)
+
+[source,hcl]
+----
+# main.tf
+provider "aws" {
+  region = "us-east-1"
+}
+
+resource "aws_instance" "ossnetwork" {
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t3.medium"
+  
+  tags = {
+    Name = "ossnetwork-app"
+    Environment = "production"
+  }
+}
+----
+
+=== 12.2 Ansible Playbooks (Future)
+
+[source,yaml]
+----
+# deploy.yml
+- hosts: ossnetwork
+  tasks:
+    - name: Pull latest code
+      git:
+        repo: https://github.com/dev-clement/OSSNetwork.git
+        dest: /app/OSSNetwork
+        
+    - name: Deploy with Docker Compose
+      docker_compose:
+        project_src: /app/OSSNetwork
+        state: present
+----
+
+== 13. Performance Optimization
+
+=== 13.1 Caching Strategy
+
+* Nginx caching for static assets
+* Redis for application caching (future)
+* Database query result caching
+* CDN for global content delivery (future)
+
+=== 13.2 Resource Limits
+
+[source,yaml]
+----
+services:
+  backend:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+----
+
+== 14. Maintenance Procedures
+
+=== 14.1 Regular Maintenance
+
+* Weekly security updates
+* Monthly dependency updates
+* Quarterly infrastructure review
+* Container image updates
+
+=== 14.2 Database Maintenance
+
+[source,bash]
+----
+# Vacuum and analyze
+docker-compose exec database psql -U ossnetwork -c "VACUUM ANALYZE;"
+
+# Reindex
+docker-compose exec database psql -U ossnetwork -c "REINDEX DATABASE ossnetwork;"
+----
+
+== 15. References
+
+* Docker Documentation: https://docs.docker.com/
+* Docker Compose: https://docs.docker.com/compose/
+* Nginx Documentation: https://nginx.org/en/docs/
+* PostgreSQL in Docker: https://hub.docker.com/_/postgres
+
+== Appendix: Related Documents
+
+* link:system-architecture.adoc[System Architecture Document]
+* link:component-architecture.adoc[Component Architecture Document]
+* link:security-architecture.adoc[Security Architecture Document]
+
+---
+_Document Version: 1.0_ +
+_Last Updated: 2026-01-18_ +
+_Status: Initial Release_
