@@ -1,0 +1,949 @@
+= Security Architecture Document
+:toc: macro
+:toclevels: 3
+:sectnums:
+
+toc::[]
+
+== 1. Introduction
+
+=== 1.1 Purpose
+
+This document describes the security architecture of the OSSNetwork system, outlining security controls, threat models, and protective measures implemented across all system components.
+
+=== 1.2 Scope
+
+This document covers:
+
+* Security requirements and compliance
+* Authentication and authorization mechanisms
+* Data security and encryption
+* Network security controls
+* Application security measures
+* Infrastructure security
+* Security monitoring and incident response
+
+=== 1.3 Security Objectives
+
+* *Confidentiality*: Protect sensitive data from unauthorized access
+* *Integrity*: Ensure data accuracy and prevent tampering
+* *Availability*: Maintain system availability and prevent denial of service
+* *Authentication*: Verify user identities
+* *Authorization*: Control access based on permissions
+* *Accountability*: Track and audit security-relevant events
+
+== 2. Security Principles
+
+=== 2.1 Defense in Depth
+
+Multiple layers of security controls:
+
+* Network layer: Firewall, SSL/TLS
+* Application layer: Input validation, authentication
+* Data layer: Encryption, access controls
+* Physical layer: Cloud provider security (future)
+
+=== 2.2 Least Privilege
+
+* Users granted minimum necessary permissions
+* Service accounts with restricted access
+* Database users with limited privileges
+* Container security contexts
+
+=== 2.3 Security by Design
+
+* Security considered from architecture phase
+* Threat modeling during design
+* Secure coding practices
+* Regular security reviews
+
+=== 2.4 Zero Trust
+
+* Never trust, always verify
+* Authenticate and authorize every request
+* Segment network access
+* Monitor all activities
+
+== 3. Threat Model
+
+=== 3.1 Assets
+
+[cols="1,2,1"]
+|===
+| Asset | Description | Sensitivity
+
+| User Credentials
+| Passwords, tokens
+| Critical
+
+| Personal Data
+| Email, bio, profiles
+| High
+
+| Project Data
+| Repositories, descriptions
+| Medium
+
+| Contribution Data
+| Status, relationships
+| Medium
+
+| API Keys
+| External service credentials
+| Critical
+
+| Database
+| All persistent data
+| Critical
+|===
+
+=== 3.2 Threat Actors
+
+[cols="1,2,2"]
+|===
+| Actor | Motivation | Capability
+
+| External Attacker
+| Data theft, service disruption
+| Medium to High
+
+| Malicious User
+| Abuse features, spam
+| Low to Medium
+
+| Insider Threat
+| Data exfiltration
+| Medium
+
+| Automated Bots
+| Spam, scraping
+| Low
+|===
+
+=== 3.3 Common Threats (OWASP Top 10)
+
+[cols="1,2,2"]
+|===
+| Threat | Risk Level | Mitigation
+
+| Injection
+| High
+| Parameterized queries, input validation
+
+| Broken Authentication
+| High
+| Strong password policy, JWT, MFA (future)
+
+| Sensitive Data Exposure
+| High
+| Encryption, secure storage
+
+| XML External Entities (XXE)
+| Low
+| JSON only, no XML processing
+
+| Broken Access Control
+| Medium
+| RBAC, authorization checks
+
+| Security Misconfiguration
+| Medium
+| Secure defaults, configuration review
+
+| Cross-Site Scripting (XSS)
+| Medium
+| Output encoding, CSP headers
+
+| Insecure Deserialization
+| Low
+| JSON schema validation
+
+| Using Components with Known Vulnerabilities
+| Medium
+| Dependency scanning, updates
+
+| Insufficient Logging & Monitoring
+| Medium
+| Comprehensive logging, alerting
+|===
+
+== 4. Authentication Security
+
+=== 4.1 User Authentication
+
+==== 4.1.1 Password Security
+
+*Requirements*:
+* Minimum 8 characters
+* At least one uppercase letter
+* At least one lowercase letter
+* At least one number
+* Optional: special character
+
+*Storage*:
+* Bcrypt hashing with salt
+* Work factor: 12 rounds
+* Never store plaintext passwords
+* Hash passwords before database storage
+
+[source,python]
+----
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Hash password
+hashed_password = pwd_context.hash(plain_password)
+
+# Verify password
+pwd_context.verify(plain_password, hashed_password)
+----
+
+==== 4.1.2 JWT Token Security
+
+*Token Configuration*:
+* Algorithm: HS256 (HMAC with SHA-256)
+* Secret key: Strong random 256-bit key
+* Access token expiry: 30 minutes
+* Refresh token expiry: 7 days
+
+*Token Structure*:
+[source,json]
+----
+{
+  "sub": "user_id",
+  "email": "user@example.com",
+  "exp": 1640000000,
+  "iat": 1639900000,
+  "scopes": ["user"]
+}
+----
+
+*Security Measures*:
+* Tokens signed to prevent tampering
+* Short expiration times
+* Revocation mechanism (blacklist - future)
+* Secure storage in httpOnly cookies (future)
+
+==== 4.1.3 OAuth2 Integration (Future)
+
+*GitHub OAuth*:
+* Authorization Code flow
+* State parameter for CSRF protection
+* PKCE for enhanced security
+* Scope: `user:email`, `read:user`
+
+=== 4.2 Session Management
+
+* Stateless JWT-based sessions
+* No server-side session storage
+* Token refresh mechanism
+* Logout invalidates refresh token
+* Session timeout: 30 minutes of inactivity
+
+=== 4.3 Multi-Factor Authentication (Future)
+
+* TOTP (Time-based One-Time Password)
+* Backup codes
+* Optional for users, required for admins
+* SMS/Email verification for account recovery
+
+== 5. Authorization Security
+
+=== 5.1 Role-Based Access Control (RBAC)
+
+[cols="1,3"]
+|===
+| Role | Permissions
+
+| *Anonymous*
+| View public projects, view public profiles
+
+| *User*
+| Create projects, request contributions, update own profile
+
+| *Project Owner*
+| Manage own projects, approve/reject contributions
+
+| *Admin* (future)
+| Full system access, user management
+|===
+
+=== 5.2 Resource-Level Authorization
+
+[source,python]
+----
+# Example authorization check
+def check_project_owner(user_id: str, project_id: str) -> bool:
+    project = get_project(project_id)
+    if project.owner_id != user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="You don't have permission to modify this project"
+        )
+    return True
+----
+
+=== 5.3 API Authorization
+
+* All authenticated endpoints require valid JWT
+* Verify token signature and expiration
+* Check user permissions for requested resource
+* Return 401 for authentication failures
+* Return 403 for authorization failures
+
+== 6. Data Security
+
+=== 6.1 Data Classification
+
+[cols="1,2,2"]
+|===
+| Classification | Examples | Protection Level
+
+| Public
+| Project descriptions, usernames
+| Low
+
+| Internal
+| User emails, contribution notes
+| Medium
+
+| Confidential
+| Passwords, tokens, PII
+| High
+
+| Restricted
+| Admin credentials, API keys
+| Critical
+|===
+
+=== 6.2 Data Encryption
+
+==== 6.2.1 Data in Transit
+
+* TLS 1.2+ for all connections
+* HTTPS everywhere (HSTS enabled)
+* Strong cipher suites only
+* Certificate pinning (future mobile apps)
+
+[source,nginx]
+----
+# Nginx SSL configuration
+ssl_protocols TLSv1.2 TLSv1.3;
+ssl_ciphers HIGH:!aNULL:!MD5;
+ssl_prefer_server_ciphers on;
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+----
+
+==== 6.2.2 Data at Rest
+
+* Database encryption (PostgreSQL native - future)
+* File system encryption on host
+* Encrypted database backups
+* Secure key management
+
+[source]
+----
+# PostgreSQL encryption
+ssl = on
+ssl_cert_file = 'server.crt'
+ssl_key_file = 'server.key'
+----
+
+==== 6.2.3 Secrets Management
+
+* Environment variables for configuration
+* Never commit secrets to version control
+* Rotate secrets regularly
+* Future: HashiCorp Vault or AWS Secrets Manager
+
+[source,bash]
+----
+# .env (never committed)
+SECRET_KEY=<256-bit-random-key>
+DATABASE_PASSWORD=<strong-password>
+GITHUB_CLIENT_SECRET=<oauth-secret>
+----
+
+=== 6.3 Data Privacy (GDPR Compliance)
+
+==== 6.3.1 Privacy Principles
+
+* Data minimization: Collect only necessary data
+* Purpose limitation: Use data only for stated purpose
+* Storage limitation: Retain data only as long as needed
+* Integrity and confidentiality: Secure data handling
+
+==== 6.3.2 User Rights
+
+* *Right to Access*: Export user data
+* *Right to Rectification*: Update incorrect data
+* *Right to Erasure*: Delete user account and data
+* *Right to Portability*: Download data in standard format
+* *Right to Object*: Opt-out of certain processing
+
+==== 6.3.3 Data Handling
+
+[source,python]
+----
+# User data export
+@app.get("/api/v1/users/{user_id}/export")
+async def export_user_data(user_id: str):
+    # Return all user data in JSON format
+    pass
+
+# User data deletion (GDPR)
+@app.delete("/api/v1/users/{user_id}/gdpr-delete")
+async def gdpr_delete_user(user_id: str):
+    # Anonymize or delete user data
+    pass
+----
+
+=== 6.4 Data Sanitization
+
+==== 6.4.1 Input Validation
+
+* Validate all user inputs
+* Type checking (Pydantic schemas)
+* Length restrictions
+* Format validation (email, URL)
+* Whitelist allowed characters
+
+[source,python]
+----
+from pydantic import BaseModel, EmailStr, validator
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    username: str
+    password: str
+    
+    @validator('username')
+    def validate_username(cls, v):
+        if not v.isalnum():
+            raise ValueError('Username must be alphanumeric')
+        if len(v) < 3 or len(v) > 50:
+            raise ValueError('Username must be 3-50 characters')
+        return v
+----
+
+==== 6.4.2 Output Encoding
+
+* Escape HTML entities
+* JSON encoding for API responses
+* Content Security Policy headers
+* X-Content-Type-Options: nosniff
+
+[source]
+----
+# Security headers
+Content-Security-Policy: default-src 'self'
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+X-XSS-Protection: 1; mode=block
+----
+
+== 7. Application Security
+
+=== 7.1 SQL Injection Prevention
+
+* Use parameterized queries (SQLAlchemy ORM)
+* Never concatenate SQL strings
+* Prepared statements
+* Least privilege database user
+
+[source,python]
+----
+# Safe: Parameterized query
+users = db.query(User).filter(User.email == email).first()
+
+# Unsafe: String concatenation (NEVER DO THIS)
+# query = f"SELECT * FROM users WHERE email = '{email}'"
+----
+
+=== 7.2 Cross-Site Scripting (XSS) Prevention
+
+* Output encoding in frontend
+* Content Security Policy
+* HTTP-only cookies for tokens (future)
+* Sanitize user-generated content
+
+[source,javascript]
+----
+// Vue.js automatically escapes content
+<template>
+  <div>{{ userInput }}</div> <!-- Safe: Auto-escaped -->
+  <div v-html="trustedHtml"></div> <!-- Use with caution -->
+</template>
+----
+
+=== 7.3 Cross-Site Request Forgery (CSRF) Prevention
+
+* JWT tokens in Authorization header (not cookies)
+* Same-Site cookie attribute (when using cookies)
+* CSRF tokens for state-changing operations (future)
+* Verify Origin/Referer headers
+
+=== 7.4 API Security
+
+==== 7.4.1 Rate Limiting
+
+* Prevent brute force attacks
+* Limit requests per IP/user
+* Different limits for authenticated/anonymous
+* Exponential backoff for failed attempts
+
+[source,python]
+----
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
+
+@app.post("/api/v1/auth/login")
+@limiter.limit("5/minute")
+async def login():
+    pass
+----
+
+==== 7.4.2 Input Size Limits
+
+* Maximum request body size: 10MB
+* Maximum file upload size: 5MB
+* Maximum string lengths in database
+* Prevent memory exhaustion attacks
+
+==== 7.4.3 API Versioning
+
+* Version API to deprecate insecure endpoints
+* Maintain security patches for older versions
+* Clear deprecation timeline
+
+=== 7.5 Dependency Security
+
+* Regular dependency updates
+* Automated vulnerability scanning
+* Lock file for reproducible builds
+* Review dependencies before adding
+
+[source,bash]
+----
+# Scan Python dependencies
+pixi run pip-audit
+
+# Scan Node.js dependencies
+npm audit
+npm audit fix
+----
+
+== 8. Network Security
+
+=== 8.1 Network Segmentation
+
+[mermaid]
+....
+graph TB
+    Internet[Internet<br/>Untrusted]
+    
+    subgraph DMZ
+        Nginx[Nginx<br/>Reverse Proxy]
+    end
+    
+    subgraph Internal Network
+        Frontend[Frontend]
+        Backend[Backend]
+        DB[(Database)]
+    end
+    
+    Internet --> Nginx
+    Nginx --> Frontend
+    Nginx --> Backend
+    Backend --> DB
+....
+
+=== 8.2 Firewall Rules
+
+[cols="1,1,1,2"]
+|===
+| Source | Destination | Port | Purpose
+
+| Internet
+| Nginx
+| 80, 443
+| HTTP/HTTPS traffic
+
+| Nginx
+| Frontend
+| 3000
+| Internal proxy
+
+| Nginx
+| Backend
+| 8000
+| API proxy
+
+| Backend
+| Database
+| 5432
+| Database access
+
+| All others
+| All
+| DENY
+| Default deny
+|===
+
+=== 8.3 DDoS Protection
+
+* Rate limiting at reverse proxy
+* Connection limits
+* Request timeout settings
+* Cloud-based DDoS protection (future: Cloudflare)
+
+=== 8.4 SSL/TLS Configuration
+
+* TLS 1.2 minimum (prefer TLS 1.3)
+* Strong cipher suites only
+* Perfect Forward Secrecy (PFS)
+* HSTS with long max-age
+* Certificate from trusted CA
+
+[source,nginx]
+----
+ssl_protocols TLSv1.2 TLSv1.3;
+ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256';
+ssl_prefer_server_ciphers off;
+ssl_session_cache shared:SSL:10m;
+ssl_session_timeout 10m;
+----
+
+== 9. Infrastructure Security
+
+=== 9.1 Container Security
+
+==== 9.1.1 Image Security
+
+* Use official base images
+* Minimal base images (alpine)
+* Regular image updates
+* Image vulnerability scanning
+* Multi-stage builds to reduce attack surface
+
+[source,dockerfile]
+----
+# Use specific version tags (not 'latest')
+FROM python:3.12-slim
+
+# Run as non-root user
+RUN useradd -m -u 1000 appuser
+USER appuser
+
+# Copy only necessary files
+COPY --chown=appuser:appuser . /app
+----
+
+==== 9.1.2 Container Runtime Security
+
+* Read-only root filesystem where possible
+* Drop unnecessary capabilities
+* Limit resources (CPU, memory)
+* Security profiles (AppArmor/SELinux)
+
+[source,yaml]
+----
+services:
+  backend:
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+----
+
+=== 9.2 Database Security
+
+* Separate database user per application
+* Least privilege access
+* Network access restrictions
+* Regular security updates
+* Encrypted connections (SSL)
+* Strong passwords (32+ characters)
+
+[source,sql]
+----
+-- Create restricted database user
+CREATE USER ossnetwork WITH PASSWORD 'strong-random-password';
+GRANT CONNECT ON DATABASE ossnetwork TO ossnetwork;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ossnetwork;
+-- No DROP, TRUNCATE, or administrative privileges
+----
+
+=== 9.3 Host Security
+
+* Keep OS and packages updated
+* Disable unnecessary services
+* Configure firewall (iptables/ufw)
+* SSH key authentication only
+* Fail2ban for brute force protection
+* Regular security patches
+
+=== 9.4 Backup Security
+
+* Encrypted backups
+* Secure backup storage
+* Access control for backups
+* Test restoration procedures
+* Offsite backup storage
+
+== 10. Monitoring & Logging
+
+=== 10.1 Security Logging
+
+==== 10.1.1 Log Events
+
+* Authentication attempts (success/failure)
+* Authorization failures
+* Data modifications
+* Administrative actions
+* API requests (rate limiting)
+* Security-relevant errors
+
+==== 10.1.2 Log Format
+
+[source,json]
+----
+{
+  "timestamp": "2026-01-18T16:30:00Z",
+  "level": "WARNING",
+  "event": "authentication_failed",
+  "user_email": "user@example.com",
+  "ip_address": "192.168.1.100",
+  "user_agent": "Mozilla/5.0...",
+  "details": {
+    "reason": "invalid_password",
+    "attempt_count": 3
+  }
+}
+----
+
+==== 10.1.3 Log Security
+
+* Never log sensitive data (passwords, tokens)
+* Log to centralized system (future)
+* Tamper-proof logs
+* Access control for logs
+* Log retention: 90 days
+
+=== 10.2 Security Monitoring
+
+* Failed login attempts
+* Unusual API usage patterns
+* Privilege escalation attempts
+* Data access anomalies
+* System resource exhaustion
+
+=== 10.3 Alerting
+
+[cols="1,2,1"]
+|===
+| Event | Alert Threshold | Priority
+
+| Failed logins
+| 5 attempts in 5 minutes
+| High
+
+| API rate limit
+| 90% of limit reached
+| Medium
+
+| Database errors
+| 10 errors in 1 minute
+| High
+
+| Unauthorized access
+| Any attempt
+| Critical
+
+| System resources
+| >90% utilization
+| High
+|===
+
+== 11. Incident Response
+
+=== 11.1 Incident Response Plan
+
+==== 11.1.1 Preparation
+
+* Document response procedures
+* Define roles and responsibilities
+* Maintain contact information
+* Regular training and drills
+
+==== 11.1.2 Detection
+
+* Automated monitoring and alerting
+* Log analysis
+* User reports
+* Security scanning
+
+==== 11.1.3 Containment
+
+* Isolate affected systems
+* Block malicious IPs
+* Revoke compromised credentials
+* Take backups before changes
+
+==== 11.1.4 Eradication
+
+* Remove malicious code
+* Patch vulnerabilities
+* Update security rules
+* Reset compromised credentials
+
+==== 11.1.5 Recovery
+
+* Restore from clean backups
+* Verify system integrity
+* Monitor for recurrence
+* Gradual service restoration
+
+==== 11.1.6 Lessons Learned
+
+* Document incident details
+* Root cause analysis
+* Update security measures
+* Share knowledge with team
+
+=== 11.2 Breach Notification
+
+* GDPR: Notify within 72 hours
+* Notify affected users
+* Notify authorities if required
+* Document breach details
+
+== 12. Security Testing
+
+=== 12.1 Testing Strategy
+
+[cols="1,2,1"]
+|===
+| Test Type | Description | Frequency
+
+| Vulnerability Scanning
+| Automated scanning of dependencies
+| Daily
+
+| Static Analysis
+| Code security analysis (SAST)
+| Every commit
+
+| Dynamic Analysis
+| Runtime security testing (DAST)
+| Weekly
+
+| Penetration Testing
+| Manual security assessment
+| Quarterly
+
+| Security Code Review
+| Manual code review
+| Every PR
+|===
+
+=== 12.2 Security Checklist
+
+*Pre-Deployment*:
+- [ ] All dependencies up to date
+- [ ] No known vulnerabilities
+- [ ] Security tests passing
+- [ ] Secrets properly configured
+- [ ] HTTPS enabled
+- [ ] Backups configured
+
+*Regular Maintenance*:
+- [ ] Review access logs weekly
+- [ ] Update dependencies monthly
+- [ ] Security patch review
+- [ ] Backup restoration test
+- [ ] Incident response drill
+
+== 13. Compliance
+
+=== 13.1 GDPR Compliance
+
+* Privacy by design
+* Data protection impact assessment
+* Consent management
+* User rights implementation
+* Data breach procedures
+* Data protection officer (required >250 employees)
+
+=== 13.2 Security Standards
+
+* OWASP Top 10 compliance
+* CIS Controls adherence
+* ISO 27001 principles (future certification)
+* PCI DSS (if handling payments - future)
+
+== 14. Security Roadmap
+
+=== 14.1 Current Implementation
+
+- [x] HTTPS/TLS encryption
+- [x] JWT authentication
+- [x] Password hashing (bcrypt)
+- [x] Input validation (Pydantic)
+- [x] SQL injection prevention (ORM)
+- [x] CORS configuration
+- [x] Container isolation
+
+=== 14.2 Near-Term (3-6 months)
+
+- [ ] Rate limiting implementation
+- [ ] Security headers (CSP, HSTS)
+- [ ] Automated vulnerability scanning
+- [ ] Centralized logging
+- [ ] OAuth2 integration (GitHub)
+- [ ] Email verification
+- [ ] Audit logging
+
+=== 14.3 Long-Term (6-12 months)
+
+- [ ] Multi-factor authentication
+- [ ] Web Application Firewall (WAF)
+- [ ] Secrets management (Vault)
+- [ ] Security Information and Event Management (SIEM)
+- [ ] Penetration testing program
+- [ ] Bug bounty program
+- [ ] Security certification (ISO 27001)
+
+== 15. Security Contacts
+
+* *Security Team*: security@ossnetwork.com
+* *Vulnerability Reports*: security@ossnetwork.com
+* *Data Protection Officer*: dpo@ossnetwork.com
+* *Incident Response*: incident@ossnetwork.com
+
+== 16. References
+
+* OWASP Top 10: https://owasp.org/www-project-top-ten/
+* GDPR: https://gdpr.eu/
+* CIS Controls: https://www.cisecurity.org/controls/
+* FastAPI Security: https://fastapi.tiangolo.com/tutorial/security/
+* Docker Security: https://docs.docker.com/engine/security/
+
+== Appendix: Related Documents
+
+* link:system-architecture.adoc[System Architecture Document]
+* link:component-architecture.adoc[Component Architecture Document]
+* link:data-architecture.adoc[Data Architecture Document]
+* link:api-architecture.adoc[API Architecture Document]
+
+---
+_Document Version: 1.0_ +
+_Last Updated: 2026-01-18_ +
+_Status: Initial Release_ +
+_Classification: Internal_

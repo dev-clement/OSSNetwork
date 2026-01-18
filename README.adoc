@@ -97,6 +97,7 @@ This repository serves as the main hub for the OSSNetwork application. It is org
 * *frontend/* - Vue.js 3 + Vite frontend application (linked as git submodule)
 * *backend/* - Python 3.12 + FastAPI backend API (linked as git submodule)
 * *deployment/* - Contains deployment configurations, scripts, and documentation
+* *doc/* - Comprehensive documentation including requirements and technical architecture
 
 === Architecture
 
@@ -105,6 +106,19 @@ The application is split into separate repositories for better modularity and de
 * Frontend repository will handle the user interface and client-side logic
 * Backend repository will handle the server-side API and business logic
 * This main repository acts as the integration point and contains deployment configurations
+
+=== Documentation
+
+Comprehensive technical architecture documentation is available in the link:doc/architecture/[doc/architecture/] directory:
+
+* **link:doc/architecture/system-architecture.adoc[System Architecture]** - Overall system design and technology stack
+* **link:doc/architecture/component-architecture.adoc[Component Architecture]** - Frontend and backend components
+* **link:doc/architecture/data-architecture.adoc[Data Architecture]** - Database models and relationships
+* **link:doc/architecture/deployment-architecture.adoc[Deployment Architecture]** - Infrastructure and deployment
+* **link:doc/architecture/api-architecture.adoc[API Architecture]** - REST API design and endpoints
+* **link:doc/architecture/security-architecture.adoc[Security Architecture]** - Security controls and compliance
+
+See the link:doc/architecture/README.adoc[Architecture Documentation Index] for detailed navigation guides.
 
 === Getting Started
 

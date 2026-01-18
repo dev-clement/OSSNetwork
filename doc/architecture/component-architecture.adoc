@@ -1,0 +1,754 @@
+= Component Architecture Document
+:toc: macro
+:toclevels: 3
+:sectnums:
+
+toc::[]
+
+== 1. Introduction
+
+=== 1.1 Purpose
+
+This document describes the detailed component architecture of the OSSNetwork system, including the structure of the frontend, backend, and supporting components.
+
+=== 1.2 Scope
+
+This document covers:
+
+* Frontend component structure and organization
+* Backend component structure and modules
+* Component interactions and dependencies
+* Design patterns and best practices
+
+== 2. Frontend Architecture
+
+=== 2.1 Overview
+
+The frontend is built as a Single Page Application (SPA) using Vue.js 3 with the Composition API and Vite as the build tool.
+
+=== 2.2 Technology Stack
+
+[cols="1,1,2"]
+|===
+| Technology | Version | Purpose
+
+| Vue.js
+| 3.x
+| Progressive JavaScript framework
+
+| Vite
+| Latest
+| Build tool and dev server
+
+| JavaScript (ES6+)
+| Latest
+| Programming language
+
+| Composition API
+| Vue 3
+| Component logic organization
+|===
+
+=== 2.3 Directory Structure
+
+[source]
+----
+frontend/
+├── index.html              # Entry HTML file
+├── vite.config.js          # Vite configuration
+├── package.json            # Dependencies and scripts
+├── src/
+│   ├── main.js            # Application entry point
+│   ├── App.vue            # Root component
+│   ├── style.css          # Global styles
+│   ├── components/        # Reusable Vue components
+│   │   └── HelloWorld.vue
+│   ├── views/             # Page components (future)
+│   ├── router/            # Vue Router configuration (future)
+│   ├── stores/            # State management (future)
+│   ├── services/          # API service layer (future)
+│   ├── composables/       # Reusable composition functions (future)
+│   ├── utils/             # Utility functions (future)
+│   └── assets/            # Static assets (images, fonts)
+└── public/                # Public static files
+----
+
+=== 2.4 Component Organization
+
+==== 2.4.1 Component Types
+
+[cols="1,3"]
+|===
+| Type | Description
+
+| *Layout Components*
+| Define page structure (Header, Footer, Sidebar)
+
+| *Page Components*
+| Full-page views mapped to routes
+
+| *Feature Components*
+| Business-specific components (ProjectCard, ContributionList)
+
+| *Common Components*
+| Reusable UI elements (Button, Input, Modal)
+
+| *Composite Components*
+| Combine multiple components into complex features
+|===
+
+==== 2.4.2 Component Design Principles
+
+* *Single Responsibility*: Each component has one clear purpose
+* *Composition over Inheritance*: Use composition API and composables
+* *Props Down, Events Up*: Unidirectional data flow
+* *Reusability*: Common components are generic and configurable
+* *Testability*: Components are isolated and easily testable
+
+=== 2.5 State Management Strategy
+
+==== 2.5.1 Local Component State
+
+* Use `ref()` and `reactive()` for component-level state
+* Manage form inputs and UI state locally
+
+==== 2.5.2 Shared State (Future: Pinia)
+
+[source]
+----
+stores/
+├── user.js           # User authentication and profile
+├── projects.js       # Project listing and details
+├── contributions.js  # Contribution tracking
+└── notifications.js  # Notification management
+----
+
+=== 2.6 Routing Strategy (Future: Vue Router)
+
+[source]
+----
+router/
+└── index.js
+    ├── / (Home)
+    ├── /projects (Project Discovery)
+    ├── /projects/:id (Project Details)
+    ├── /profile (User Profile)
+    ├── /contributions (My Contributions)
+    └── /login (Authentication)
+----
+
+=== 2.7 API Integration
+
+==== 2.7.1 Service Layer Architecture
+
+[source,javascript]
+----
+// services/api.js - API client configuration
+// services/projects.js - Project-related API calls
+// services/auth.js - Authentication API calls
+// services/contributions.js - Contribution API calls
+----
+
+==== 2.7.2 API Communication Pattern
+
+[mermaid]
+....
+sequenceDiagram
+    participant Component
+    participant Service
+    participant API
+    
+    Component->>Service: Call service method
+    Service->>API: HTTP Request (Fetch/Axios)
+    API->>Service: JSON Response
+    Service->>Component: Parsed data
+    Component->>Component: Update local state
+....
+
+=== 2.8 Key Frontend Features
+
+[cols="1,2,2"]
+|===
+| Feature | Components | Description
+
+| *Authentication*
+| LoginForm, SignupForm, AuthLayout
+| User registration, login, and session management
+
+| *Project Discovery*
+| ProjectList, ProjectCard, ProjectFilters
+| Browse and search open-source projects
+
+| *Project Details*
+| ProjectDetail, ContributionButton, ProjectInfo
+| View project information and request contribution
+
+| *User Profile*
+| ProfileView, ContributionHistory, TechStack
+| Display user bio, skills, and contribution portfolio
+
+| *Notifications*
+| NotificationBell, NotificationList, NotificationItem
+| Real-time notifications for project updates
+|===
+
+== 3. Backend Architecture
+
+=== 3.1 Overview
+
+The backend is built using FastAPI, a modern Python web framework that provides high performance and automatic API documentation.
+
+=== 3.2 Technology Stack
+
+[cols="1,1,2"]
+|===
+| Technology | Version | Purpose
+
+| Python
+| 3.12 (LTS)
+| Programming language
+
+| FastAPI
+| 0.128.x
+| Web framework
+
+| Uvicorn
+| Latest
+| ASGI server
+
+| Pixi
+| Latest
+| Package manager
+
+| Pydantic
+| Latest (via FastAPI)
+| Data validation
+
+| SQLAlchemy
+| Latest (future)
+| ORM for database access
+|===
+
+=== 3.3 Directory Structure
+
+[source]
+----
+backend/
+├── pixi.toml              # Pixi configuration
+├── Dockerfile             # Container configuration
+├── deployment/
+│   └── .gitkeep
+├── src/                   # Source code (future)
+│   ├── main.py           # FastAPI application entry
+│   ├── config.py         # Configuration management
+│   ├── models/           # Database models
+│   │   ├── user.py
+│   │   ├── project.py
+│   │   └── contribution.py
+│   ├── schemas/          # Pydantic schemas (request/response)
+│   │   ├── user.py
+│   │   ├── project.py
+│   │   └── contribution.py
+│   ├── api/              # API endpoints
+│   │   ├── __init__.py
+│   │   ├── routes/
+│   │   │   ├── auth.py
+│   │   │   ├── projects.py
+│   │   │   ├── users.py
+│   │   │   └── contributions.py
+│   │   └── dependencies.py
+│   ├── services/         # Business logic layer
+│   │   ├── auth_service.py
+│   │   ├── project_service.py
+│   │   └── contribution_service.py
+│   ├── repositories/     # Data access layer
+│   │   ├── user_repository.py
+│   │   ├── project_repository.py
+│   │   └── contribution_repository.py
+│   ├── core/             # Core functionality
+│   │   ├── security.py   # Authentication/authorization
+│   │   ├── database.py   # Database connection
+│   │   └── exceptions.py # Custom exceptions
+│   └── utils/            # Utility functions
+│       ├── validators.py
+│       └── helpers.py
+└── tests/                # Test suite
+    ├── unit/
+    ├── integration/
+    └── conftest.py
+----
+
+=== 3.4 Layered Architecture
+
+==== 3.4.1 Architecture Layers
+
+[mermaid]
+....
+graph TB
+    Client[Client Request]
+    
+    subgraph Backend Layers
+        API[API Layer<br/>Routes & Endpoints]
+        Service[Service Layer<br/>Business Logic]
+        Repository[Repository Layer<br/>Data Access]
+        DB[(Database)]
+    end
+    
+    Client --> API
+    API --> Service
+    Service --> Repository
+    Repository --> DB
+....
+
+[cols="1,2,2"]
+|===
+| Layer | Responsibility | Components
+
+| *API Layer*
+| Handle HTTP requests/responses, validation
+| FastAPI routes, Pydantic schemas
+
+| *Service Layer*
+| Business logic, orchestration
+| Service classes, use case implementations
+
+| *Repository Layer*
+| Data access, query abstraction
+| Repository classes, database operations
+
+| *Data Layer*
+| Data persistence
+| PostgreSQL database
+|===
+
+==== 3.4.2 Layer Interaction Rules
+
+* API layer calls Service layer (never Repository directly)
+* Service layer calls Repository layer
+* Repository layer interacts with Database
+* No circular dependencies between layers
+* Each layer depends only on the layer below
+
+=== 3.5 Core Domain Models
+
+==== 3.5.1 User Model
+
+[source,python]
+----
+# models/user.py
+class User:
+    id: UUID
+    email: str
+    hashed_password: str
+    username: str
+    github_handle: Optional[str]
+    bio: Optional[str]
+    tech_stack: List[str]  # e.g., ["Python", "Vue.js"]
+    created_at: datetime
+    updated_at: datetime
+----
+
+==== 3.5.2 Project Model
+
+[source,python]
+----
+# models/project.py
+class Project:
+    id: UUID
+    title: str
+    description: str
+    repository_url: str
+    tags: List[str]  # Programming languages/technologies
+    help_wanted: bool
+    owner_id: UUID  # Foreign key to User
+    created_at: datetime
+    updated_at: datetime
+----
+
+==== 3.5.3 Contribution Model
+
+[source,python]
+----
+# models/contribution.py
+class Contribution:
+    id: UUID
+    user_id: UUID  # Foreign key to User
+    project_id: UUID  # Foreign key to Project
+    status: str  # "interested", "in_progress", "merged", "completed"
+    notes: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+----
+
+=== 3.6 API Endpoints Structure
+
+==== 3.6.1 Authentication Endpoints
+
+[source]
+----
+POST   /api/v1/auth/register      # User registration
+POST   /api/v1/auth/login         # User login
+POST   /api/v1/auth/logout        # User logout
+POST   /api/v1/auth/refresh       # Refresh JWT token
+GET    /api/v1/auth/me            # Get current user
+----
+
+==== 3.6.2 Project Endpoints
+
+[source]
+----
+GET    /api/v1/projects           # List all projects (with filters)
+POST   /api/v1/projects           # Create new project
+GET    /api/v1/projects/{id}      # Get project details
+PUT    /api/v1/projects/{id}      # Update project
+DELETE /api/v1/projects/{id}      # Delete project
+GET    /api/v1/projects/{id}/contributors  # Get project contributors
+----
+
+==== 3.6.3 User Endpoints
+
+[source]
+----
+GET    /api/v1/users/{id}         # Get user profile
+PUT    /api/v1/users/{id}         # Update user profile
+GET    /api/v1/users/{id}/contributions  # Get user contributions
+----
+
+==== 3.6.4 Contribution Endpoints
+
+[source]
+----
+POST   /api/v1/contributions      # Request to contribute
+GET    /api/v1/contributions/{id} # Get contribution details
+PUT    /api/v1/contributions/{id} # Update contribution status
+DELETE /api/v1/contributions/{id} # Cancel contribution request
+----
+
+=== 3.7 Request/Response Flow
+
+[mermaid]
+....
+sequenceDiagram
+    participant Client
+    participant Route
+    participant Service
+    participant Repository
+    participant Database
+    
+    Client->>Route: HTTP Request
+    Route->>Route: Validate request (Pydantic)
+    Route->>Service: Call service method
+    Service->>Service: Execute business logic
+    Service->>Repository: Query/modify data
+    Repository->>Database: Execute SQL
+    Database->>Repository: Return results
+    Repository->>Service: Return data
+    Service->>Route: Return processed data
+    Route->>Route: Format response (Pydantic)
+    Route->>Client: HTTP Response (JSON)
+....
+
+=== 3.8 Authentication & Authorization
+
+==== 3.8.1 Authentication Flow
+
+[mermaid]
+....
+sequenceDiagram
+    participant Client
+    participant API
+    participant AuthService
+    participant Database
+    
+    Client->>API: POST /login (credentials)
+    API->>AuthService: Validate credentials
+    AuthService->>Database: Query user
+    Database->>AuthService: User data
+    AuthService->>AuthService: Verify password
+    AuthService->>AuthService: Generate JWT
+    AuthService->>API: Return token
+    API->>Client: JWT token
+    
+    Note over Client: Subsequent requests
+    Client->>API: Request with Authorization header
+    API->>AuthService: Verify JWT
+    AuthService->>API: User identity
+    API->>API: Process request
+    API->>Client: Response
+....
+
+==== 3.8.2 JWT Token Structure
+
+[source,json]
+----
+{
+  "sub": "user_id",
+  "email": "user@example.com",
+  "exp": 1640000000,
+  "iat": 1639900000,
+  "scopes": ["user", "project_owner"]
+}
+----
+
+=== 3.9 Error Handling
+
+==== 3.9.1 Exception Hierarchy
+
+[source,python]
+----
+# core/exceptions.py
+class OSSNetworkException(Exception): pass
+class ValidationError(OSSNetworkException): pass
+class AuthenticationError(OSSNetworkException): pass
+class AuthorizationError(OSSNetworkException): pass
+class NotFoundError(OSSNetworkException): pass
+class ConflictError(OSSNetworkException): pass
+----
+
+==== 3.9.2 Error Response Format
+
+[source,json]
+----
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid input data",
+    "details": {
+      "field": "email",
+      "issue": "Invalid email format"
+    }
+  }
+}
+----
+
+== 4. Database Component
+
+=== 4.1 Database Architecture
+
+* *RDBMS*: PostgreSQL 16
+* *Connection Pooling*: SQLAlchemy connection pool
+* *Migrations*: Alembic (future)
+* *Schema Management*: Version-controlled migrations
+
+=== 4.2 Entity Relationship Diagram
+
+[mermaid]
+....
+erDiagram
+    USER ||--o{ PROJECT : owns
+    USER ||--o{ CONTRIBUTION : makes
+    PROJECT ||--o{ CONTRIBUTION : receives
+    
+    USER {
+        uuid id PK
+        string email UK
+        string username UK
+        string hashed_password
+        string github_handle
+        text bio
+        string_array tech_stack
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    PROJECT {
+        uuid id PK
+        string title
+        text description
+        string repository_url
+        string_array tags
+        boolean help_wanted
+        uuid owner_id FK
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    CONTRIBUTION {
+        uuid id PK
+        uuid user_id FK
+        uuid project_id FK
+        string status
+        text notes
+        timestamp created_at
+        timestamp updated_at
+    }
+....
+
+== 5. Integration Components
+
+=== 5.1 Nginx Reverse Proxy
+
+==== 5.1.1 Configuration Structure
+
+[source,nginx]
+----
+# Routing rules (future)
+location / {
+    # Frontend static files
+    proxy_pass http://frontend:3000;
+}
+
+location /api/ {
+    # Backend API
+    proxy_pass http://backend:8000;
+}
+----
+
+==== 5.1.2 Responsibilities
+
+* Route requests to appropriate backend services
+* Serve static frontend assets in production
+* SSL/TLS termination
+* Load balancing (future)
+* Rate limiting (future)
+* Request logging
+
+=== 5.2 Docker Components
+
+==== 5.2.1 Container Architecture
+
+[cols="1,2,2"]
+|===
+| Container | Base Image | Purpose
+
+| *Frontend*
+| node:alpine
+| Build and serve Vue.js application
+
+| *Backend*
+| python:3.12-slim
+| Run FastAPI application
+
+| *Database*
+| postgres:16-alpine
+| PostgreSQL database server
+
+| *Nginx*
+| nginx:alpine
+| Reverse proxy and load balancer
+|===
+
+== 6. Component Communication
+
+=== 6.1 Inter-Component Communication
+
+[mermaid]
+....
+graph LR
+    subgraph Client Side
+        Browser[Web Browser]
+    end
+    
+    subgraph Container Network
+        Nginx[Nginx<br/>:80, :443]
+        Frontend[Frontend<br/>:3000]
+        Backend[Backend<br/>:8000]
+        DB[(PostgreSQL<br/>:5432)]
+    end
+    
+    Browser -->|HTTP/HTTPS| Nginx
+    Nginx -->|Proxy /| Frontend
+    Nginx -->|Proxy /api| Backend
+    Frontend -.->|Dev mode only| Backend
+    Backend -->|TCP| DB
+....
+
+=== 6.2 Communication Protocols
+
+[cols="1,2,2"]
+|===
+| Connection | Protocol | Description
+
+| Browser ↔ Nginx
+| HTTP/HTTPS
+| All client requests
+
+| Nginx ↔ Frontend
+| HTTP
+| Static file requests
+
+| Nginx ↔ Backend
+| HTTP
+| API requests
+
+| Frontend ↔ Backend
+| HTTP (Dev mode)
+| Direct API calls during development
+
+| Backend ↔ Database
+| PostgreSQL Wire Protocol
+| Database queries
+|===
+
+== 7. Component Dependencies
+
+=== 7.1 Frontend Dependencies
+
+[source,json]
+----
+{
+  "dependencies": {
+    "vue": "^3.0.0"
+  },
+  "devDependencies": {
+    "vite": "latest",
+    "@vitejs/plugin-vue": "latest"
+  }
+}
+----
+
+=== 7.2 Backend Dependencies
+
+[source,toml]
+----
+[dependencies]
+python = "3.12.*"
+fastapi = ">=0.128.0,<0.129"
+uvicorn = "latest"
+sqlalchemy = "latest"  # future
+pydantic = "latest"     # via FastAPI
+python-jose = "latest"  # JWT - future
+passlib = "latest"      # Password hashing - future
+----
+
+== 8. Component Design Patterns
+
+=== 8.1 Frontend Patterns
+
+* *Composition API*: Organize component logic
+* *Provide/Inject*: Share data across component tree
+* *Composables*: Reusable stateful logic
+* *Single File Components*: Co-locate template, script, style
+
+=== 8.2 Backend Patterns
+
+* *Dependency Injection*: FastAPI's built-in DI system
+* *Repository Pattern*: Abstract data access
+* *Service Pattern*: Encapsulate business logic
+* *DTO Pattern*: Pydantic schemas for data transfer
+* *Factory Pattern*: Create database sessions
+
+== 9. Testing Strategy
+
+=== 9.1 Frontend Testing
+
+* *Unit Tests*: Test individual components with Vitest
+* *Component Tests*: Test component integration
+* *E2E Tests*: Test user flows with Cypress/Playwright
+
+=== 9.2 Backend Testing
+
+* *Unit Tests*: Test individual functions/classes with pytest
+* *Integration Tests*: Test API endpoints with TestClient
+* *Database Tests*: Test repository layer with test database
+
+== 10. References
+
+* link:system-architecture.adoc[System Architecture Document]
+* link:data-architecture.adoc[Data Architecture Document]
+* link:api-architecture.adoc[API Architecture Document]
+
+---
+_Document Version: 1.0_ +
+_Last Updated: 2026-01-18_ +
+_Status: Initial Release_

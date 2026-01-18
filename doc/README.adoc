@@ -1,7 +1,26 @@
-= Documentation
+= OSSNetwork Documentation
 :toc:
 
-This folder contains the requirement engineering documents and use case diagrams for the OSSNetwork project.
+This folder contains comprehensive documentation for the OSSNetwork project, including requirements engineering, use case diagrams, and technical architecture documentation.
+
+== Documentation Structure
+
+=== Technical Architecture
+
+The link:architecture/[architecture/] directory contains detailed technical architecture documents:
+
+* **link:architecture/system-architecture.adoc[System Architecture]** - High-level system overview, technology stack, and architectural patterns
+* **link:architecture/component-architecture.adoc[Component Architecture]** - Detailed frontend and backend component structure
+* **link:architecture/data-architecture.adoc[Data Architecture]** - Database design, data models, and data management
+* **link:architecture/deployment-architecture.adoc[Deployment Architecture]** - Container architecture and deployment procedures
+* **link:architecture/api-architecture.adoc[API Architecture]** - REST API design, endpoints, and conventions
+* **link:architecture/security-architecture.adoc[Security Architecture]** - Security controls, threat model, and compliance
+
+See the link:architecture/README.adoc[Architecture Documentation Index] for detailed navigation and role-specific guides.
+
+=== Requirements & Use Cases
+
+This folder also contains requirement specifications and use case diagrams for the OSSNetwork project.
 
 == Use Cases
 

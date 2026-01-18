@@ -1,0 +1,879 @@
+= Data Architecture Document
+:toc: macro
+:toclevels: 3
+:sectnums:
+
+toc::[]
+
+== 1. Introduction
+
+=== 1.1 Purpose
+
+This document describes the data architecture of the OSSNetwork system, including database design, data models, relationships, and data management strategies.
+
+=== 1.2 Scope
+
+This document covers:
+
+* Database schema design and entity relationships
+* Data models and their attributes
+* Data access patterns and queries
+* Data security and privacy considerations
+* Data migration and versioning strategies
+
+== 2. Database Overview
+
+=== 2.1 Database Technology
+
+* *Database Management System*: PostgreSQL 16
+* *Rationale*: ACID compliance, advanced features, JSON support, strong community
+* *Deployment*: Containerized using Docker
+* *Access Layer*: SQLAlchemy ORM (future implementation)
+
+=== 2.2 Database Characteristics
+
+[cols="1,3"]
+|===
+| Characteristic | Details
+
+| *Transaction Support*
+| Full ACID compliance for data integrity
+
+| *Scalability*
+| Vertical scaling initially, read replicas for horizontal scaling
+
+| *Performance*
+| Optimized with indexes, connection pooling, query optimization
+
+| *Data Types*
+| Rich type system including UUID, JSONB, arrays, timestamps
+
+| *Extensions*
+| Support for UUID generation (uuid-ossp), full-text search (pg_trgm)
+|===
+
+== 3. Data Model
+
+=== 3.1 Entity Relationship Diagram
+
+[mermaid]
+....
+erDiagram
+    USER ||--o{ PROJECT : "owns"
+    USER ||--o{ CONTRIBUTION : "makes"
+    PROJECT ||--o{ CONTRIBUTION : "has"
+    USER ||--o{ NOTIFICATION : "receives"
+    PROJECT ||--o{ PROJECT_TAG : "has"
+    TAG ||--o{ PROJECT_TAG : "used in"
+    PROJECT ||--o{ PROJECT_MEMBER : "has"
+    USER ||--o{ PROJECT_MEMBER : "member of"
+    
+    USER {
+        uuid id PK
+        varchar email UK
+        varchar username UK
+        varchar hashed_password
+        varchar github_handle
+        text bio
+        jsonb tech_stack
+        timestamp created_at
+        timestamp updated_at
+        timestamp last_login
+        boolean is_active
+        boolean is_verified
+    }
+    
+    PROJECT {
+        uuid id PK
+        varchar title
+        text description
+        varchar repository_url UK
+        boolean help_wanted
+        varchar status
+        uuid owner_id FK
+        timestamp created_at
+        timestamp updated_at
+        integer contributor_count
+    }
+    
+    CONTRIBUTION {
+        uuid id PK
+        uuid user_id FK
+        uuid project_id FK
+        varchar status
+        text notes
+        timestamp requested_at
+        timestamp started_at
+        timestamp completed_at
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    TAG {
+        uuid id PK
+        varchar name UK
+        varchar category
+        timestamp created_at
+    }
+    
+    PROJECT_TAG {
+        uuid project_id FK
+        uuid tag_id FK
+    }
+    
+    PROJECT_MEMBER {
+        uuid id PK
+        uuid project_id FK
+        uuid user_id FK
+        varchar role
+        timestamp joined_at
+    }
+    
+    NOTIFICATION {
+        uuid id PK
+        uuid user_id FK
+        varchar type
+        text message
+        jsonb metadata
+        boolean is_read
+        timestamp created_at
+    }
+....
+
+=== 3.2 Core Entities
+
+==== 3.2.1 User Entity
+
+[cols="1,1,1,3"]
+|===
+| Column | Type | Constraints | Description
+
+| id
+| UUID
+| PRIMARY KEY, NOT NULL
+| Unique identifier for the user
+
+| email
+| VARCHAR(255)
+| UNIQUE, NOT NULL
+| User's email address
+
+| username
+| VARCHAR(50)
+| UNIQUE, NOT NULL
+| User's chosen username
+
+| hashed_password
+| VARCHAR(255)
+| NOT NULL
+| Bcrypt hashed password
+
+| github_handle
+| VARCHAR(100)
+| NULLABLE
+| GitHub username for OAuth integration
+
+| bio
+| TEXT
+| NULLABLE
+| User's biography/description
+
+| tech_stack
+| JSONB
+| DEFAULT '[]'
+| Array of technologies user knows (e.g., ["Python", "Vue.js"])
+
+| created_at
+| TIMESTAMP
+| NOT NULL, DEFAULT NOW()
+| Account creation timestamp
+
+| updated_at
+| TIMESTAMP
+| NOT NULL, DEFAULT NOW()
+| Last profile update timestamp
+
+| last_login
+| TIMESTAMP
+| NULLABLE
+| Last successful login
+
+| is_active
+| BOOLEAN
+| NOT NULL, DEFAULT TRUE
+| Account status (active/inactive)
+
+| is_verified
+| BOOLEAN
+| NOT NULL, DEFAULT FALSE
+| Email verification status
+|===
+
+*Indexes*:
+
+* Primary Key: `id`
+* Unique: `email`, `username`
+* Index: `github_handle` (for OAuth lookups)
+* Index: `created_at` (for sorting)
+
+*Constraints*:
+
+* Email format validation (application level)
+* Username alphanumeric validation (application level)
+* Password strength requirements (application level)
+
+==== 3.2.2 Project Entity
+
+[cols="1,1,1,3"]
+|===
+| Column | Type | Constraints | Description
+
+| id
+| UUID
+| PRIMARY KEY, NOT NULL
+| Unique identifier for the project
+
+| title
+| VARCHAR(200)
+| NOT NULL
+| Project name/title
+
+| description
+| TEXT
+| NOT NULL
+| Detailed project description
+
+| repository_url
+| VARCHAR(500)
+| UNIQUE, NOT NULL
+| GitHub repository URL
+
+| help_wanted
+| BOOLEAN
+| NOT NULL, DEFAULT TRUE
+| Whether project is seeking contributors
+
+| status
+| VARCHAR(50)
+| NOT NULL, DEFAULT 'active'
+| Project status (active, archived, completed)
+
+| owner_id
+| UUID
+| FOREIGN KEY, NOT NULL
+| Reference to User who created the project
+
+| created_at
+| TIMESTAMP
+| NOT NULL, DEFAULT NOW()
+| Project creation timestamp
+
+| updated_at
+| TIMESTAMP
+| NOT NULL, DEFAULT NOW()
+| Last project update timestamp
+
+| contributor_count
+| INTEGER
+| NOT NULL, DEFAULT 0
+| Number of active contributors
+|===
+
+*Indexes*:
+
+* Primary Key: `id`
+* Foreign Key: `owner_id` REFERENCES `users(id)`
+* Unique: `repository_url`
+* Index: `help_wanted` (for filtering)
+* Index: `status` (for filtering)
+* Index: `created_at` (for sorting)
+* Full-text index: `title`, `description` (for search)
+
+*Constraints*:
+
+* Valid URL format for repository_url (application level)
+* Status must be one of: active, archived, completed (database constraint)
+
+==== 3.2.3 Contribution Entity
+
+[cols="1,1,1,3"]
+|===
+| Column | Type | Constraints | Description
+
+| id
+| UUID
+| PRIMARY KEY, NOT NULL
+| Unique identifier for the contribution
+
+| user_id
+| UUID
+| FOREIGN KEY, NOT NULL
+| Reference to the contributing User
+
+| project_id
+| UUID
+| FOREIGN KEY, NOT NULL
+| Reference to the Project
+
+| status
+| VARCHAR(50)
+| NOT NULL, DEFAULT 'interested'
+| Contribution status
+
+| notes
+| TEXT
+| NULLABLE
+| Additional notes or comments
+
+| requested_at
+| TIMESTAMP
+| NOT NULL, DEFAULT NOW()
+| When contribution was requested
+
+| started_at
+| TIMESTAMP
+| NULLABLE
+| When work started
+
+| completed_at
+| TIMESTAMP
+| NULLABLE
+| When contribution was completed
+
+| created_at
+| TIMESTAMP
+| NOT NULL, DEFAULT NOW()
+| Record creation timestamp
+
+| updated_at
+| TIMESTAMP
+| NOT NULL, DEFAULT NOW()
+| Record update timestamp
+|===
+
+*Status Values*:
+
+* `interested` - Initial request to contribute
+* `in_progress` - Actively working on contribution
+* `merged` - Pull request merged
+* `completed` - Contribution finished
+* `cancelled` - Contribution cancelled
+
+*Indexes*:
+
+* Primary Key: `id`
+* Foreign Key: `user_id` REFERENCES `users(id)`
+* Foreign Key: `project_id` REFERENCES `projects(id)`
+* Composite Index: `(user_id, project_id)` (for uniqueness check)
+* Index: `status` (for filtering)
+* Index: `created_at` (for sorting)
+
+*Constraints*:
+
+* Unique constraint on (user_id, project_id) to prevent duplicate requests
+* Status must be valid enum value (database constraint)
+
+==== 3.2.4 Tag Entity
+
+[cols="1,1,1,3"]
+|===
+| Column | Type | Constraints | Description
+
+| id
+| UUID
+| PRIMARY KEY, NOT NULL
+| Unique identifier for the tag
+
+| name
+| VARCHAR(50)
+| UNIQUE, NOT NULL
+| Tag name (e.g., "Python", "JavaScript")
+
+| category
+| VARCHAR(50)
+| NOT NULL
+| Tag category (language, framework, tool)
+
+| created_at
+| TIMESTAMP
+| NOT NULL, DEFAULT NOW()
+| Tag creation timestamp
+|===
+
+*Indexes*:
+
+* Primary Key: `id`
+* Unique: `name`
+* Index: `category` (for filtering)
+
+==== 3.2.5 Project_Tag Entity (Junction Table)
+
+[cols="1,1,1,3"]
+|===
+| Column | Type | Constraints | Description
+
+| project_id
+| UUID
+| FOREIGN KEY, NOT NULL
+| Reference to Project
+
+| tag_id
+| UUID
+| FOREIGN KEY, NOT NULL
+| Reference to Tag
+|===
+
+*Indexes*:
+
+* Composite Primary Key: `(project_id, tag_id)`
+* Foreign Key: `project_id` REFERENCES `projects(id)` ON DELETE CASCADE
+* Foreign Key: `tag_id` REFERENCES `tags(id)` ON DELETE CASCADE
+* Index: `tag_id` (for reverse lookups)
+
+==== 3.2.6 Project_Member Entity
+
+[cols="1,1,1,3"]
+|===
+| Column | Type | Constraints | Description
+
+| id
+| UUID
+| PRIMARY KEY, NOT NULL
+| Unique identifier
+
+| project_id
+| UUID
+| FOREIGN KEY, NOT NULL
+| Reference to Project
+
+| user_id
+| UUID
+| FOREIGN KEY, NOT NULL
+| Reference to User
+
+| role
+| VARCHAR(50)
+| NOT NULL, DEFAULT 'contributor'
+| User's role in the project
+
+| joined_at
+| TIMESTAMP
+| NOT NULL, DEFAULT NOW()
+| When user joined the project
+|===
+
+*Role Values*:
+
+* `owner` - Project owner/creator
+* `maintainer` - Project maintainer
+* `contributor` - Active contributor
+* `reviewer` - Code reviewer
+
+*Indexes*:
+
+* Primary Key: `id`
+* Composite Unique: `(project_id, user_id)`
+* Foreign Key: `project_id` REFERENCES `projects(id)` ON DELETE CASCADE
+* Foreign Key: `user_id` REFERENCES `users(id)` ON DELETE CASCADE
+
+==== 3.2.7 Notification Entity
+
+[cols="1,1,1,3"]
+|===
+| Column | Type | Constraints | Description
+
+| id
+| UUID
+| PRIMARY KEY, NOT NULL
+| Unique identifier
+
+| user_id
+| UUID
+| FOREIGN KEY, NOT NULL
+| Reference to User receiving notification
+
+| type
+| VARCHAR(50)
+| NOT NULL
+| Notification type
+
+| message
+| TEXT
+| NOT NULL
+| Notification message
+
+| metadata
+| JSONB
+| DEFAULT '{}'
+| Additional structured data
+
+| is_read
+| BOOLEAN
+| NOT NULL, DEFAULT FALSE
+| Read status
+
+| created_at
+| TIMESTAMP
+| NOT NULL, DEFAULT NOW()
+| Notification creation timestamp
+|===
+
+*Notification Types*:
+
+* `contribution_approved` - Contribution request approved
+* `contribution_rejected` - Contribution request rejected
+* `role_assigned` - New role assigned in project
+* `project_update` - Project information updated
+* `mention` - User mentioned in discussion
+
+*Indexes*:
+
+* Primary Key: `id`
+* Foreign Key: `user_id` REFERENCES `users(id)` ON DELETE CASCADE
+* Composite Index: `(user_id, is_read)` (for filtering unread)
+* Index: `created_at` (for sorting)
+
+== 4. Data Access Patterns
+
+=== 4.1 Common Query Patterns
+
+==== 4.1.1 User Queries
+
+[source,sql]
+----
+-- Get user profile with contribution count
+SELECT u.*, COUNT(c.id) as contribution_count
+FROM users u
+LEFT JOIN contributions c ON u.id = c.user_id
+WHERE u.id = $1
+GROUP BY u.id;
+
+-- Search users by tech stack
+SELECT * FROM users
+WHERE tech_stack @> '["Python"]'::jsonb;
+----
+
+==== 4.1.2 Project Queries
+
+[source,sql]
+----
+-- List projects with tags
+SELECT p.*, ARRAY_AGG(t.name) as tags
+FROM projects p
+LEFT JOIN project_tags pt ON p.id = pt.project_id
+LEFT JOIN tags t ON pt.tag_id = t.id
+WHERE p.help_wanted = TRUE
+GROUP BY p.id
+ORDER BY p.created_at DESC
+LIMIT 20;
+
+-- Search projects by technology
+SELECT DISTINCT p.*
+FROM projects p
+JOIN project_tags pt ON p.id = pt.project_id
+JOIN tags t ON pt.tag_id = t.id
+WHERE t.name = 'Python'
+  AND p.status = 'active';
+
+-- Full-text search on projects
+SELECT * FROM projects
+WHERE to_tsvector('english', title || ' ' || description)
+      @@ to_tsquery('english', $1);
+----
+
+==== 4.1.3 Contribution Queries
+
+[source,sql]
+----
+-- Get user's contribution history
+SELECT c.*, p.title, p.repository_url
+FROM contributions c
+JOIN projects p ON c.project_id = p.id
+WHERE c.user_id = $1
+ORDER BY c.created_at DESC;
+
+-- Get project's contributors
+SELECT u.id, u.username, u.github_handle, c.status
+FROM users u
+JOIN contributions c ON u.id = c.user_id
+WHERE c.project_id = $1
+  AND c.status IN ('in_progress', 'merged', 'completed');
+----
+
+==== 4.1.4 Analytics Queries
+
+[source,sql]
+----
+-- Most popular technologies
+SELECT t.name, COUNT(pt.project_id) as project_count
+FROM tags t
+JOIN project_tags pt ON t.id = pt.tag_id
+GROUP BY t.id, t.name
+ORDER BY project_count DESC
+LIMIT 10;
+
+-- Active contributors
+SELECT u.id, u.username, COUNT(c.id) as contribution_count
+FROM users u
+JOIN contributions c ON u.id = c.user_id
+WHERE c.status IN ('merged', 'completed')
+GROUP BY u.id, u.username
+ORDER BY contribution_count DESC
+LIMIT 10;
+----
+
+=== 4.2 Query Optimization
+
+* Use indexes on frequently queried columns
+* Implement pagination for large result sets
+* Use prepared statements to prevent SQL injection
+* Implement connection pooling for efficiency
+* Use EXPLAIN ANALYZE for query performance tuning
+* Cache frequently accessed data (future: Redis)
+
+== 5. Data Integrity
+
+=== 5.1 Constraints
+
+==== 5.1.1 Entity Integrity
+
+* All tables have primary keys (UUIDs)
+* NOT NULL constraints on required fields
+* UNIQUE constraints on natural keys (email, username)
+
+==== 5.1.2 Referential Integrity
+
+* Foreign key constraints with appropriate ON DELETE actions
+* CASCADE delete for dependent data (notifications, project_tags)
+* RESTRICT delete for core relationships (user contributions)
+
+==== 5.1.3 Domain Integrity
+
+* CHECK constraints for enum values (status fields)
+* Data type constraints (VARCHAR lengths, BOOLEAN, TIMESTAMP)
+* Application-level validation for complex rules
+
+=== 5.2 Transactions
+
+* Use ACID transactions for multi-table operations
+* Transaction isolation level: READ COMMITTED (default)
+* Implement optimistic locking for concurrent updates
+* Use database transactions for critical operations
+
+== 6. Data Security
+
+=== 6.1 Security Measures
+
+[cols="1,3"]
+|===
+| Measure | Implementation
+
+| *Password Storage*
+| Bcrypt hashing with salt (never store plain text)
+
+| *Sensitive Data*
+| Encrypt PII data at rest (future)
+
+| *Access Control*
+| Role-based access at application level
+
+| *SQL Injection*
+| Parameterized queries, ORM usage
+
+| *Connection Security*
+| SSL/TLS for database connections
+
+| *Audit Logging*
+| Track data modifications (future)
+|===
+
+=== 6.2 Privacy Compliance (GDPR)
+
+* User data export capability
+* Right to deletion (anonymize user data)
+* Consent tracking for data processing
+* Data retention policies
+* Privacy by design principles
+
+== 7. Data Migration & Versioning
+
+=== 7.1 Migration Strategy
+
+* *Tool*: Alembic (SQLAlchemy migrations) - future
+* *Approach*: Version-controlled migration scripts
+* *Testing*: Test migrations on staging before production
+* *Rollback*: Maintain down-migration scripts
+
+=== 7.2 Migration Workflow
+
+[source,bash]
+----
+# Create migration
+alembic revision --autogenerate -m "Add notifications table"
+
+# Apply migration
+alembic upgrade head
+
+# Rollback migration
+alembic downgrade -1
+----
+
+=== 7.3 Schema Versioning
+
+* Track schema version in database
+* Maintain migration history
+* Document breaking changes
+* Coordinate with application deployments
+
+== 8. Backup & Recovery
+
+=== 8.1 Backup Strategy
+
+[cols="1,2,1"]
+|===
+| Backup Type | Schedule | Retention
+
+| *Full Backup*
+| Daily
+| 30 days
+
+| *Incremental Backup*
+| Every 6 hours
+| 7 days
+
+| *Transaction Log*
+| Continuous
+| 7 days
+|===
+
+=== 8.2 Recovery Procedures
+
+* Point-in-time recovery capability
+* Automated backup verification
+* Documented recovery procedures
+* Regular disaster recovery drills
+
+== 9. Performance Optimization
+
+=== 9.1 Indexing Strategy
+
+[cols="1,2,2"]
+|===
+| Table | Index | Purpose
+
+| users
+| email, username
+| Unique lookups
+
+| users
+| created_at
+| Chronological queries
+
+| projects
+| (help_wanted, status)
+| Filtered listings
+
+| projects
+| owner_id
+| User's projects
+
+| contributions
+| (user_id, project_id)
+| Relationship queries
+
+| contributions
+| status
+| Status filtering
+
+| project_tags
+| (project_id, tag_id)
+| Tag associations
+|===
+
+=== 9.2 Query Optimization Techniques
+
+* Use EXPLAIN ANALYZE for query planning
+* Implement query result caching (Redis - future)
+* Use database views for complex queries
+* Implement read replicas for read-heavy operations
+* Partition large tables by date (future)
+
+=== 9.3 Connection Pooling
+
+[source,python]
+----
+# SQLAlchemy connection pool configuration
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=20,
+    max_overflow=10,
+    pool_pre_ping=True,
+    pool_recycle=3600
+)
+----
+
+== 10. Data Lifecycle
+
+=== 10.1 Data Creation
+
+* Validate data at application layer (Pydantic schemas)
+* Set default values (timestamps, booleans)
+* Generate UUIDs for primary keys
+* Record audit information (created_at, created_by)
+
+=== 10.2 Data Modification
+
+* Update timestamps automatically
+* Log modifications (audit trail - future)
+* Validate business rules before persistence
+* Use optimistic locking for concurrent updates
+
+=== 10.3 Data Archival
+
+* Archive inactive projects after 2 years
+* Soft delete user accounts (mark as inactive)
+* Retain data for legal/compliance requirements
+* Implement data retention policies
+
+=== 10.4 Data Deletion
+
+* Soft delete by default (mark as deleted)
+* Hard delete on user request (GDPR)
+* Cascade deletes for dependent data
+* Maintain referential integrity
+
+== 11. Future Enhancements
+
+=== 11.1 Planned Features
+
+* *Messaging System*: Direct messages between users
+* *Activity Feed*: Timeline of user and project activities
+* *Search Optimization*: PostgreSQL full-text search with pg_trgm
+* *Analytics Tables*: Denormalized tables for reporting
+* *Audit Logs*: Complete audit trail of data changes
+
+=== 11.2 Scalability Considerations
+
+* *Read Replicas*: For read-heavy workloads
+* *Partitioning*: Partition large tables by date
+* *Caching*: Redis for frequently accessed data
+* *Database Sharding*: If horizontal scaling needed
+* *Time-series Data*: Separate storage for metrics
+
+== 12. References
+
+* PostgreSQL Documentation: https://www.postgresql.org/docs/16/
+* SQLAlchemy Documentation: https://docs.sqlalchemy.org/
+* Alembic Documentation: https://alembic.sqlalchemy.org/
+
+== Appendix: Related Documents
+
+* link:system-architecture.adoc[System Architecture Document]
+* link:component-architecture.adoc[Component Architecture Document]
+* link:api-architecture.adoc[API Architecture Document]
+* link:security-architecture.adoc[Security Architecture Document]
+
+---
+_Document Version: 1.0_ +
+_Last Updated: 2026-01-18_ +
+_Status: Initial Release_
