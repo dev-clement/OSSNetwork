@@ -1,11 +1,46 @@
-= Documentation
-:toc:
+= General Requirements Specification
+:toc: macro
 
-This folder contains the requirement engineering documents and use case diagrams for the OSSNetwork project.
+This document outlines the general architectural requirements and specifications for the OSSNetwork project.
 
-== Use Cases
+== General Specifications
 
-=== General Use Cases
+[cols="1,3,1", options="header"]
+|===
+| ID | Description | Priority
+a
+| GEN-001
+| The system must be scalable to support a growing number of users and data.
+| [red]#High#
+
+| GEN-002
+| The system must ensure data privacy and security, adhering to relevant regulations (e.g., GDPR).
+| [red]#High#
+
+| GEN-003
+| The architecture should be modular, separating frontend, backend, and database concerns.
+| [orange]#Medium#
+
+| GEN-004
+| The system must support high availability and fault tolerance.
+| [red]#High#
+
+| GEN-005
+| The user interface must be responsive and accessible across different devices and screen sizes.
+| [orange]#Medium#
+
+| GEN-006
+| All API communication must be secured using standard protocols (e.g., HTTPS, OAuth2).
+| [red]#High#
+
+|===
+
+// Note: To view the diagram in the preview, ensure the 'AsciiDoc' extension is installed and 'asciidoc.use_kroki' is enabled in settings.
+// Switching to 'graph' syntax for better compatibility.
+
+== Use Case Diagrams
+
+The following diagram illustrates the primary system interactions based on the high-level requirements.
 
 [mermaid]
 ....
@@ -29,7 +64,51 @@ graph LR
     Admin --> UC4
 ....
 
-=== Manager Use Cases
+See link:use_cases.mmd[Source file]
+
+== Developer Interaction Use Cases
+
+The following diagram illustrates the specific interactions for the Developer persona.
+
+[mermaid]
+....
+graph LR
+    Dev((Developer))
+
+    subgraph OSS [OSSNetwork System]
+        direction TB
+        %% Authentication & Session
+        UC1([Sign-in])
+        UC2([Log-in])
+        UC3([Sign-Out])
+
+        %% Project Interaction
+        UC4([See all projects])
+        UC5([Filter the projects])
+        UC6([Contact a project])
+        UC7([Ask for working on the project])
+
+        %% Notifications
+        UC8([Handle Notification])
+        UC9([Push notification])
+    end
+
+    Dev --> UC1
+    Dev --> UC2
+    Dev --> UC3
+    Dev --> UC4
+    Dev --> UC5
+    Dev --> UC6
+    Dev --> UC7
+    Dev --> UC8
+    Dev --> UC9
+....
+
+See link:use_case_user.mmd[Source file]
+
+== Project Manager Interaction Use Cases
+
+The following diagram illustrates the specific interactions for the Project Manager persona, including project administration and team management.
 
 [mermaid]
 ....
@@ -65,38 +144,4 @@ graph LR
     PM --> UC10
 ....
 
-=== User/Developer Use Cases
-
-[mermaid]
-....
-graph LR
-    Dev((Developer))
-
-    subgraph OSS [OSSNetwork System]
-        direction TB
-        %% Authentication & Session
-        UC1([Sign-in])
-        UC2([Log-in])
-        UC3([Sign-Out])
-
-        %% Project Interaction
-        UC4([See all projects])
-        UC5([Filter the projects])
-        UC6([Contact a project])
-        UC7([Ask for working on the project])
-
-        %% Notifications
-        UC8([Handle Notification])
-        UC9([Push notification])
-    end
-
-    Dev --> UC1
-    Dev --> UC2
-    Dev --> UC3
-    Dev --> UC4
-    Dev --> UC5
-    Dev --> UC6
-    Dev --> UC7
-    Dev --> UC8
-    Dev --> UC9
-....
+See link:use_case_manager.mmd[Source file]
